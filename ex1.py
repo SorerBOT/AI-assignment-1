@@ -12,63 +12,136 @@ KEY_PLANTS  = "Plants"
 KEY_ROBOTS  = "Robots"
 
 class State:
-    size        = (0,0) 
-    walls       = frozenset()
+    size:       tuple 
+    walls:      dict[tuple, bool]
     taps:       dict[tuple, int]
     plants:     dict[tuple, int]
-    robots:     dict[int, tuple]
+    robots:     dict[tuple, tuple]
 
     @staticmethod
     def create_initial_state(initial):
-        State.size       = tuple(initial[KEY_SIZE])
-        State.walls      = frozenset(initial[KEY_WALLS])
+        State.size      = tuple(initial[KEY_SIZE])
+        State.walls     = dict([((i,j), True) for (i,j) in initial[KEY_WALLS]]) 
+        _robots         = dict(((i,j), (id, load, capacity)) for id, (i, j, load, capacity) in initial[KEY_ROBOTS].items())
 
         return State(initial[KEY_TAPS],
                      initial[KEY_PLANTS],
-                     initial[KEY_ROBOTS])
-        
-    def __init__(self, taps, plants, robots):
+                     _robots)
+    def __init__(self,
+                    taps: dict[tuple, int],
+                    plants: dict[tuple, int],
+                    robots: dict[tuple, tuple]):
         self.taps       = dict(taps)
         self.plants     = dict(plants)
         self.robots     = dict(robots)
 
     def __str__(self):
-        str_size    = f"Grid dimensions: {State.size}"
-        str_walls   = f"Walls coordinates: {State.walls}"
-        str_taps    = f"Taps: {self.taps}"
-        str_plants    = f"Plants: {self.plants}"
-        str_robots    = f"Robots: {self.robots}"
+        str_size        = f"Grid dimensions: {State.size}"
+        str_walls       = f"Walls coordinates: {State.walls}"
+        str_taps        = f"Taps: {self.taps}"
+        str_plants      = f"Plants: {self.plants}"
+        str_robots      = f"Robots: {self.robots}"
 
         return f"{str_size}\n{str_walls}\n{str_taps}\n{str_plants}\n{str_robots}"
 
 class WateringProblem(search.Problem):
     """This class implements a pressure plate problem"""
     state: State
+    initial: State
 
     def __init__(self, initial):
         """ Constructor only needs the initial state.
         Don't forget to set the goal or implement the goal test"""
         search.Problem.__init__(self, initial)
         self.state = State.create_initial_state(initial)
-        print ( str(self.state) )
+        self.initial = self.state
 
-    def successor(self, state):
+    def successor(self, state: State):
         """ Generates the successor states returns [(action, achieved_states, ...)]"""
-        utils.raiseNotDefined()
+        (width, height) = state.size
+        moves = []
+        is_move_legal = lambda i,j: (
+                (0 <= i < height)
+                and (0 <= j < width)
+                and not State.walls.get((i,j), False)
+                and not state.robots.get((i,j), False))
+
+        # ----------------------------------------------------------
+        # Didn't want to commit to a specific format for saving the robots.
+        # ----------------------------------------------------------
+        generate_robot = lambda id, i, j, load, capacity: (id, load, capacity)
+        generate_robot_key = lambda id, i, j, load, capacity: (i,j)
+
+        for (i,j), (id, load, capacity) in state.robots.items():
+            if is_move_legal(i+1, j):
+                state_new = State(state.taps, state.plants, state.robots)
+
+                del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                state_new.robots[generate_robot_key(id, i+1, j, load, capacity)] = generate_robot(id, i+1, j, load, capacity)
+
+                moves.append((f"DOWN{{{id}}}", state_new))
+
+            if is_move_legal(i-1, j):
+                state_new = State(state.taps, state.plants, state.robots)
+
+                del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                state_new.robots[generate_robot_key(id, i-1, j, load, capacity)] = generate_robot(id, i-1, j, load, capacity)
+
+                moves.append((f"UP{{{id}}}", state_new))
+
+            if is_move_legal(i, j+1):
+                state_new = State(state.taps, state.plants, state.robots)
+
+                del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                state_new.robots[generate_robot_key(id, i, j+1, load, capacity)] = generate_robot(id, i, j+1, load, capacity)
+
+                moves.append((f"RIGHT{{{id}}}", state_new))
+
+            if is_move_legal(i, j-1):
+                state_new = State(state.taps, state.plants, state.robots)
+
+                del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                state_new.robots[generate_robot_key(id, i, j-1, load, capacity)] = generate_robot(id, i, j-1, load, capacity)
+
+                moves.append((f"LEFT{{{id}}}", state_new))
+
+            if (load > 0):
+                plant_water_needed = state.plants.get((i,j), 0)
+                if plant_water_needed > 0:
+                        state_new = State(state.taps, state.plants, state.robots)
+
+                        del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                        state_new.robots[generate_robot_key(id, i, j, load - 1, capacity)] = generate_robot(id, i, j, load - 1, capacity)
+
+                        state_new.plants[(i,j)] = plant_water_needed - 1
+                        moves.append((f"POUR{{{id}}}", state_new))
+
+            remaining_capacity = capacity - load
+            if (remaining_capacity > 0):
+                water_available = state.taps.get((i,j), 0)
+                if water_available > 0:
+                        state_new = State(state.taps, state.plants, state.robots)
+
+                        del state_new.robots[generate_robot_key(id, i, j, load, capacity)]
+                        state_new.robots[generate_robot_key(id, i, j, load + 1, capacity)] = generate_robot(id, i, j, load + 1, capacity)
+
+                        state_new.taps[(i,j)] = water_available - 1
+                        moves.append((f"LOAD{{{id}}}", state_new))
+        return moves
 
     def goal_test(self, state: State):
         """ given a state, checks if this is the goal state, compares to the created goal state returns True/False"""
-        return state.plants
+        return all(not v for v in state.plants.values())
 
     def h_astar(self, node):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
-        utils.raiseNotDefined()
+        return 0
 
     def h_gbfs(self, node):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
-        utils.raiseNotDefined()
+        return 0
 
 
 def create_watering_problem(game):

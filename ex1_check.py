@@ -15,8 +15,6 @@ def run_problem(func, targs=(), kwargs=None):
     except Exception as e:
         result = (-3, e)
     return result
-
-
 # check_problem: problem, search_method, timeout
 # timeout_exec: search_method, targs=[problem], timeout_duration=timeout
 def solve_problems(problem, algorithm):
@@ -25,7 +23,6 @@ def solve_problems(problem, algorithm):
     except Exception as e:
         print("Error creating problem: ", e)
         return None
-
     if algorithm == "gbfs":
         result = run_problem((lambda p: search.greedy_best_first_graph_search(p, p.h_gbfs)),targs=[p])
     else:
@@ -205,7 +202,10 @@ problem7 = {
 
 def main():
     start = time.time()
-    problem = [problem1]
+    problem = [problem1,
+               problem2,
+               problem3,
+               problem4]
     for p in problem:
         for a in ['astar','gbfs']:
             solve_problems(p, a)
