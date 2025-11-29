@@ -10,6 +10,9 @@ KEY_TAPS    = "Taps"
 KEY_PLANTS  = "Plants"
 KEY_ROBOTS  = "Robots"
 
+def distance(cords_1: tuple[int, int], cords_2: tuple[int, int]):
+    return abs(cords_1[0] - cords_2[0]) + abs(cords_1[1] - cords_2[1])
+
 class State:
     size:           tuple[int, int]
     walls:          dict[tuple[int, int], bool]
@@ -149,28 +152,98 @@ class WateringProblem(search.Problem):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
 
-        return 0
-        min_distance_to_tap     = float('inf')
-        min_distance_to_plant   = float('inf')
-        total_load              = 0
-        for (i, j), (id, load, capacity) in node.state.robots.items():
-            current_distance_to_tap     = min((abs(i - tap_i) + abs(j - tap_j)) for (tap_i, tap_j) in node.state.taps.keys())
-            current_distance_to_plant   = min((abs(i - plant_i) + abs(j - plant_j)) for (plant_i, plant_j) in node.state.plants.keys())
-            min_distance_to_tap         = min(min_distance_to_tap, current_distance_to_tap)
-            min_distance_to_plant       = min(min_distance_to_plant, current_distance_to_plant)
-            total_load                  += load
+        total_load                              = 0
+        non_satiated_plants_cords               = [plant_cords  for plant_cords, plant_water_needed in node.state.plants.items()    if plant_water_needed > 0]
+        non_empty_tap_cords                     = [tap_cords    for tap_cords, water_available      in node.state.taps.items()      if water_available > 0]
 
-        heuristic                       = (2 * sum(node.state.plants.values()) - total_load)
+        if not non_satiated_plants_cords:
+            return 0
 
-        if total_load == 0:
-            heuristic                   += min_distance_to_tap
+        min_robot_contribution_distance         = float('inf')
+        for robot_cords, (id, load, capacity) in node.state.robots.items():
+            current_robot_contribution_distance = float('inf')
+            if load == 0:
+                if non_empty_tap_cords:
+                    current_robot_contribution_distance  = min(
+                        distance(robot_cords, tap_cords) + distance(tap_cords, plant_cords)
+                        for tap_cords in non_empty_tap_cords
+                        for plant_cords in non_satiated_plants_cords)
+            else:
+                current_robot_contribution_distance  = min(
+                        distance(robot_cords, plant_cords)
+                        for plant_cords in non_satiated_plants_cords)
+            min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
+            total_load                      += load
+
+        total_water_available           = sum(node.state.plants.values())
+        total_plant_water_needed        = sum(node.state.plants.values())
+        heuristic                       = 2 * total_plant_water_needed - total_load
+
+        if total_water_available + total_load < total_plant_water_needed:
+            return float('inf')
         else:
-            heuristic                   += min(min_distance_to_tap, min_distance_to_plant)
+            heuristic += min_robot_contribution_distance
         return heuristic
+
+    #def h_astar(self, node):
+    #    """ This is the heuristic. It gets a node (not a state)
+    #    and returns a goal distance estimate"""
+
+    #    min_distance_to_tap                     = float('inf')
+    #    min_distance_to_plant                   = float('inf')
+    #    min_distance_to_tap_and_then_to_plant   = float('inf')
+    #    min_distance_to_plant_and_then_to_tap   = float('inf')
+    #    total_load                              = 0
+    #    total_capacity                          = 0
+
+    #    non_satiated_plants_cords               = [plant_cords for plant_cords, plant_water_needed in node.state.plants.items() if plant_water_needed > 0]
+    #    non_empty_tap_cords                     = [tap_cords for tap_cords, water_available in node.state.taps.items() if water_available > 0]
+
+    #    if not non_satiated_plants_cords:
+    #        return 0
+
+    #    for robot_cords, (id, load, capacity) in node.state.robots.items():
+    #        current_distance_to_tap     = min(distance(robot_cords, tap_cords)      for tap_cords   in node.state.taps.keys())
+    #        current_distance_to_plant   = min(distance(robot_cords, plant_cords)    for plant_cords in node.state.plants.keys())
+    #        min_distance_to_tap         = min(min_distance_to_tap, current_distance_to_tap)
+    #        min_distance_to_plant       = min(min_distance_to_plant, current_distance_to_plant)
+
+    #        if non_satiated_plants_cords and non_empty_tap_cords:
+    #            current_distance_to_tap_and_then_to_plant   = min(
+    #                        distance(robot_cords, tap_cords) + distance(tap_cords, plant_cords)
+    #                        for tap_cords in non_empty_tap_cords
+    #                        for plant_cords in non_satiated_plants_cords)
+    #            current_distance_to_plant_and_then_to_tap   = min(
+    #                    distance(robot_cords, plant_cords)  + distance(plant_cords, tap_cords)
+    #                    for tap_cords in non_empty_tap_cords
+    #                    for plant_cords in non_satiated_plants_cords)
+    #            min_distance_to_tap_and_then_to_plant       = min(min_distance_to_tap_and_then_to_plant, current_distance_to_tap_and_then_to_plant)
+    #            min_distance_to_plant_and_then_to_tap       = min(min_distance_to_plant_and_then_to_tap, current_distance_to_plant_and_then_to_tap)
+
+    #        total_load                  += load
+    #        total_capacity              += capacity
+
+    #    total_water_available           = sum(node.state.plants.values())
+    #    total_plant_water_needed        = sum(node.state.plants.values())
+    #    heuristic                       = 2 * total_plant_water_needed - total_load
+
+    #    if total_water_available + total_load < total_plant_water_needed:
+    #        return float('inf')
+
+    #    if total_load == total_capacity:
+    #        heuristic                   += min_distance_to_plant
+
+    #    elif total_load == 0:
+    #        #heuristic                   += min_distance_to_tap + min_distance_to_plant
+    #        heuristic                   += min_distance_to_tap_and_then_to_plant
+    #    else:
+    #        heuristic                   += min(min_distance_to_tap, min_distance_to_plant)
+    #    return heuristic
 
     def h_gbfs(self, node):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
+        return 2 * sum(node.state.plants.values()) - sum(load for (id, load, capacity) in node.state.robots.values())
         min_distance_to_tap     = float('inf')
         min_distance_to_plant   = float('inf')
         total_load              = 0

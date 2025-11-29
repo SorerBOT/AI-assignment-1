@@ -3,7 +3,7 @@ import time
 import ex1
 import search
 
-
+VERBOSE = False
 
 def run_problem(func, targs=(), kwargs=None):
     if kwargs is None:
@@ -31,9 +31,9 @@ def solve_problems(problem, algorithm):
     if result and isinstance(result[0], search.Node):
         solve = result[0].path()[::-1]
         solution = [pi.action for pi in solve][1:]
-        print(len(solution), solution)
+        return len(solution)
     else:
-        print("no solution")
+        return None
 
 
 
@@ -195,18 +195,35 @@ problem7 = {
     },
 }
 
-
-
+correct_answers = [0, 8, 20, 28, 13, None, 8, 21]
 
 
 
 def main():
     start = time.time()
-    problem = [problem3]
+    problem = [problem1,
+               problem2,
+               problem3,
+               problem4,
+               problem5_deadend,
+               problem6,
+               problem7]
+    i = 1
+    is_failed = False
     for p in problem:
-        #for a in ['astar','gbfs']:
-        for a in ['astar']:
-            solve_problems(p, a)
+        for a in ['astar','gbfs']:
+            print(f"Problem {i}, {a}")
+            len = solve_problems(p, a)
+            if a == 'astar':
+                if (len == correct_answers[i]):
+                    print(f"Problem {i} PASSED.")
+                else:
+                    is_failed = True
+                    print(f"Problem {i} FAILED.")
+            else:
+                print(f"Problem {i} GBFS took {len} steps")
+        i += 1
+    print(f"Final Result: {"SOME FAILED" if is_failed else "ALL PASSED"}")
     end = time.time()
     print('Submission took:', end-start, 'seconds.')
 
