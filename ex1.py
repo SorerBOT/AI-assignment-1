@@ -1,3 +1,4 @@
+import math
 import ex1_check
 import search
 import utils
@@ -19,6 +20,7 @@ class State:
     taps:           dict[tuple[int, int], int]
     plants:         dict[tuple[int, int], int]
     robots:         dict[tuple[int, int], tuple[str, int, int]]
+    __hash:         int | None
 
     @staticmethod
     def create_initial_state(initial):
@@ -26,50 +28,69 @@ class State:
         State.walls     = dict([((i,j), True) for (i,j) in initial[KEY_WALLS]]) 
         _robots         = dict(((i,j), (str(id), load, capacity)) for id, (i, j, load, capacity) in initial[KEY_ROBOTS].items())
 
-        return State(initial[KEY_TAPS],
+        return State(None,
+                     initial[KEY_TAPS],
                      initial[KEY_PLANTS],
                      _robots)
     def __init__(self,
-                    _taps: dict[tuple, int],
-                    _plants: dict[tuple, int],
-                    _robots: dict[tuple, tuple]):
-        self.taps           = dict(_taps)
-        self.plants         = dict(_plants)
-        self.robots         = dict(_robots)
+                _old_state                                  = None,
+                _taps       : dict[tuple, int]      | None  = None,
+                _plants     : dict[tuple, int]      | None  = None,
+                _robots     : dict[tuple, tuple]    | None  = None):
+        if _old_state is not None:
+            self.taps       = _old_state.taps
+            self.plants     = _old_state.plants
+            self.robots     = _old_state.robots
+
+        if _taps is not None:
+            self.taps           = dict(_taps)
+        if _plants is not None:
+            self.plants         = dict(_plants)
+        if _robots is not None:
+            self.robots         = dict(_robots)
+        self.__hash         = None
 
     def __str__(self):
-        str_size            = f"Grid dimensions: {State.size}"
-        str_walls           = f"Walls coordinates: {State.walls}"
-        str_taps            = f"Taps: {self.taps}"
-        str_plants          = f"Plants: {self.plants}"
-        str_robots          = f"Robots: {self.robots}"
+        str_size                = f"Grid dimensions: {State.size}"
+        str_walls               = f"Walls coordinates: {State.walls}"
+        str_taps                = f"Taps: {self.taps}"
+        str_plants              = f"Plants: {self.plants}"
+        str_robots              = f"Robots: {self.robots}"
 
         return f"{str_size}\n{str_walls}\n{str_taps}\n{str_plants}\n{str_robots}"
 
     def __hash__(self):
-        return hash((
-            tuple(sorted(self.walls.items())),
-            tuple(sorted(self.taps.items())),
-            tuple(sorted(self.plants.items())),
-            tuple(sorted(self.robots.items())),
-            ))
+        if self.__hash:
+            return self.__hash
+        else:
+            self.__hash = hash((
+                tuple(sorted(self.taps.items())),
+                tuple(sorted(self.plants.items())),
+                tuple(sorted(self.robots.items())),
+                ))
+        return self.__hash
 
     def __eq__(self, other):
         return (
-            self.walls  == other.walls  and
             self.taps   == other.taps   and
             self.plants == other.plants and
             self.robots == other.robots)
 
 class WateringProblem(search.Problem):
     """This class implements a pressure plate problem"""
-    initial: State
+    initial:            State
+    heuristics_cache:   dict[State, float]
+    cache_hits:         int
+    cache_misses:       int
 
     def __init__(self, initial):
         """ Constructor only needs the initial state.
         Don't forget to set the goal or implement the goal test"""
         search.Problem.__init__(self, initial)
-        self.initial = State.create_initial_state(initial)
+        self.initial                    = State.create_initial_state(initial)
+        self.heuristics_cache           = {}
+        self.cache_hits                 = 0
+        self.cache_misses               = 0
 
     def successor(self, state: State):
         """ Generates the successor states returns [(action, achieved_states, ...)]"""
@@ -91,57 +112,68 @@ class WateringProblem(search.Problem):
             old_robot_key           = generate_robot_key(id, i, j, load, capacity)
 
             if is_move_legal(i+1, j):
-                state_new       = State(state.taps, state.plants, state.robots)
-
-                del state_new.robots[old_robot_key]
-                state_new.robots[generate_robot_key(id, i+1, j, load, capacity)] = generate_robot(id, i+1, j, load, capacity)
+                state_new_robots = dict(state.robots)
+                del state_new_robots[old_robot_key]
+                state_new_robots[generate_robot_key(id, i+1, j, load, capacity)] = generate_robot(id, i+1, j, load, capacity)
+                state_new       = State(state, _robots = state_new_robots)
 
                 moves.append((f"DOWN{{{id}}}", state_new))
 
             if is_move_legal(i-1, j):
-                state_new       = State(state.taps, state.plants, state.robots)
-
-                del state_new.robots[old_robot_key]
-                state_new.robots[generate_robot_key(id, i-1, j, load, capacity)] = generate_robot(id, i-1, j, load, capacity)
+                state_new_robots    = dict(state.robots)
+                del state_new_robots[old_robot_key]
+                state_new_robots[generate_robot_key(id, i-1, j, load, capacity)] = generate_robot(id, i-1, j, load, capacity)
+                state_new           = State(state, _robots = state_new_robots)
 
                 moves.append((f"UP{{{id}}}", state_new))
 
             if is_move_legal(i, j+1):
-                state_new       = State(state.taps, state.plants, state.robots)
-
-                del state_new.robots[old_robot_key]
-                state_new.robots[generate_robot_key(id, i, j+1, load, capacity)] = generate_robot(id, i, j+1, load, capacity)
+                state_new_robots    = dict(state.robots)
+                del state_new_robots[old_robot_key]
+                state_new_robots[generate_robot_key(id, i, j+1, load, capacity)] = generate_robot(id, i, j+1, load, capacity)
+                state_new           = State(state, _robots = state_new_robots)
 
                 moves.append((f"RIGHT{{{id}}}", state_new))
 
             if is_move_legal(i, j-1):
-                state_new       = State(state.taps, state.plants, state.robots)
-
-                del state_new.robots[old_robot_key]
-                state_new.robots[generate_robot_key(id, i, j-1, load, capacity)] = generate_robot(id, i, j-1, load, capacity)
+                state_new_robots    = dict(state.robots)
+                del state_new_robots[old_robot_key]
+                state_new_robots[generate_robot_key(id, i, j-1, load, capacity)] = generate_robot(id, i, j-1, load, capacity)
+                state_new           = State(state, _robots = state_new_robots)
 
                 moves.append((f"LEFT{{{id}}}", state_new))
 
             if (load > 0):
                 plant_water_needed = state.plants.get((i,j), 0)
                 if plant_water_needed > 0:
-                        state_new = State(state.taps, state.plants, state.robots)
+                    state_new_robots    = dict(state.robots)
+                    state_new_plants    = dict(state.plants)
 
-                        del state_new.robots[old_robot_key]
-                        state_new.robots[generate_robot_key(id, i, j, load - 1, capacity)] = generate_robot(id, i, j, load - 1, capacity)
-                        state_new.plants[(i,j)] = plant_water_needed - 1
-                        moves.append((f"POUR{{{id}}}", state_new))
+                    del state_new_robots[old_robot_key]
+                    state_new_robots[generate_robot_key(id, i, j, load - 1, capacity)] = generate_robot(id, i, j, load - 1, capacity)
+                    state_new_plants[(i,j)] = plant_water_needed - 1
+                    state_new               = State(state,
+                                                _plants = state_new_plants,
+                                                _robots = state_new_robots)
+
+                    moves.append((f"POUR{{{id}}}", state_new))
 
             remaining_capacity = capacity - load
             if (remaining_capacity > 0):
                 water_available = state.taps.get((i,j), 0)
                 if water_available > 0:
-                        state_new = State(state.taps, state.plants, state.robots)
+                    state_new_robots    = dict(state.robots)
+                    state_new_taps      = dict(state.taps)
 
-                        del state_new.robots[old_robot_key]
-                        state_new.robots[generate_robot_key(id, i, j, load + 1, capacity)] = generate_robot(id, i, j, load + 1, capacity)
-                        state_new.taps[(i,j)] = water_available - 1
-                        moves.append((f"LOAD{{{id}}}", state_new))
+                    del state_new_robots[old_robot_key]
+                    state_new_robots[generate_robot_key(id, i, j, load + 1, capacity)] = generate_robot(id, i, j, load + 1, capacity)
+                    state_new_taps[(i,j)] = water_available - 1
+
+                    state_new = State(state,
+                                    _robots = state_new_robots,
+                                    _taps   = state_new_taps)
+
+                    moves.append((f"LOAD{{{id}}}", state_new))
         return moves
 
     def goal_test(self, state: State):
@@ -151,6 +183,13 @@ class WateringProblem(search.Problem):
     def h_astar(self, node):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
+
+        cached_result = self.heuristics_cache.get(node.state, None)
+        if cached_result is not None:
+                self.cache_hits         += 1
+                return cached_result
+        else:
+                self.cache_misses       += 1
 
         total_load                              = 0
         non_satiated_plants_cords               = [plant_cords  for plant_cords, plant_water_needed in node.state.plants.items()    if plant_water_needed > 0]
@@ -183,6 +222,8 @@ class WateringProblem(search.Problem):
             return float('inf')
         else:
             heuristic += min_robot_contribution_distance
+
+        self.heuristics_cache[node.state] = heuristic
         return heuristic
 
     #def h_astar(self, node):

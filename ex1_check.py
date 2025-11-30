@@ -510,7 +510,7 @@ def main():
                 else:
                     print(f"PASSED {problem_name} in {algorithm_time_end - algorithm_time_start} seconds")
             else:
-                print(f"Solved {problem_name} GBFS. {len} steps solution was found in {algorithm_time_end - algorithm_time_start} seconds")
+                print(f"Solved {problem_name} GBFS. {len} steps solution (instead of {expected_len}) was found in {algorithm_time_end - algorithm_time_start} seconds")
         i += 1
     print("------------------------------------------")
     print(f"Final Result: {"SOME FAILED" if is_failed else "ALL PASSED"}")
