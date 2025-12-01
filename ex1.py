@@ -36,7 +36,8 @@ class State:
                 _old_state                                  = None,
                 _taps       : dict[tuple, int]      | None  = None,
                 _plants     : dict[tuple, int]      | None  = None,
-                _robots     : dict[tuple, tuple]    | None  = None):
+                _robots     : dict[tuple, tuple]    | None  = None,
+                ):
 
         if _old_state is not None:
             self.taps       = _old_state.taps
@@ -125,7 +126,8 @@ class WateringProblem(search.Problem):
                                                 _plants = state_new_plants,
                                                 _robots = state_new_robots)
 
-                    moves.append((f"POUR{{{id}}}", state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((f"POUR{{{id}}}", state_new))
                     if len(state.robots.items()) == 1:
                         continue
 
@@ -144,7 +146,8 @@ class WateringProblem(search.Problem):
                                     _robots = state_new_robots,
                                     _taps   = state_new_taps)
 
-                    moves.append((f"LOAD{{{id}}}", state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((f"LOAD{{{id}}}", state_new))
                     if len(state.robots.items()) == 1 and load <= sum(state.plants.values()):
                         continue
             if is_move_legal(i+1, j):
@@ -153,7 +156,8 @@ class WateringProblem(search.Problem):
                 state_new_robots[generate_robot_key(id, i+1, j, load, capacity)] = generate_robot(id, i+1, j, load, capacity)
                 state_new       = State(state, _robots = state_new_robots)
 
-                moves.append((f"DOWN{{{id}}}", state_new))
+                if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((f"DOWN{{{id}}}", state_new))
 
             if is_move_legal(i-1, j):
                 state_new_robots    = dict(state.robots)
@@ -161,7 +165,8 @@ class WateringProblem(search.Problem):
                 state_new_robots[generate_robot_key(id, i-1, j, load, capacity)] = generate_robot(id, i-1, j, load, capacity)
                 state_new           = State(state, _robots = state_new_robots)
 
-                moves.append((f"UP{{{id}}}", state_new))
+                if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((f"UP{{{id}}}", state_new))
 
             if is_move_legal(i, j+1):
                 state_new_robots    = dict(state.robots)
@@ -169,7 +174,8 @@ class WateringProblem(search.Problem):
                 state_new_robots[generate_robot_key(id, i, j+1, load, capacity)] = generate_robot(id, i, j+1, load, capacity)
                 state_new           = State(state, _robots = state_new_robots)
 
-                moves.append((f"RIGHT{{{id}}}", state_new))
+                if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((f"RIGHT{{{id}}}", state_new))
 
             if is_move_legal(i, j-1):
                 state_new_robots    = dict(state.robots)
@@ -177,7 +183,8 @@ class WateringProblem(search.Problem):
                 state_new_robots[generate_robot_key(id, i, j-1, load, capacity)] = generate_robot(id, i, j-1, load, capacity)
                 state_new           = State(state, _robots = state_new_robots)
 
-                moves.append((f"LEFT{{{id}}}", state_new))
+                if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((f"LEFT{{{id}}}", state_new))
 
         return moves
 
@@ -189,12 +196,14 @@ class WateringProblem(search.Problem):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
 
-        cached_result = self.heuristics_cache.get(node.state, None)
-        if cached_result is not None:
-                self.cache_hits         += 1
-                return cached_result
-        else:
-                self.cache_misses       += 1
+        # Now checking whether states are in the cache before appending them to the possible moves list
+
+        # cached_result = self.heuristics_cache.get(node.state, None)
+        # if cached_result is not None:
+        #         self.cache_hits         += 1
+        #         return cached_result
+        # else:
+        #         self.cache_misses       += 1
 
         total_load                              = 0
         non_satiated_plants_cords               = [plant_cords  for plant_cords, plant_water_needed in node.state.plants.items()    if plant_water_needed > 0]
