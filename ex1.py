@@ -19,7 +19,11 @@ class State:
     robots:                 tuple[tuple[str, int, int]]
     robot_cords:            set[tuple[int, int]]
     robot_cords_tuple:      tuple[tuple[int, int]]
-    __hash:                 int | None
+    __hash:                 int
+    __hash_taps:            int
+    __hash_plants:          int
+    __hash_robots:          int
+    __hash_robot_cords_tuple: int
 
     def __init__(self,
                 _old_state                                                  = None,
@@ -35,29 +39,28 @@ class State:
             self.robot_cords        = _old_state.robot_cords
             self.robot_cords_tuple  = _old_state.robot_cords_tuple
             self.robots             = _old_state.robots
+            self.__hash_taps        = _old_state.__hash_taps
+            self.__hash_plants        = _old_state.__hash_plants
+            self.__hash_robots        = _old_state.__hash_robots
+            self.__hash_robot_cords_tuple   = _old_state.__hash_robot_cords_tuple
 
         if _taps is not None:
             self.taps           = _taps
+            self.__hash_taps    = hash(self.taps)
         if _plants is not None:
             self.plants         = _plants
+            self.__hash_plants    = hash(self.plants)
         if _robot_cords is not None:
             self.robot_cords    = _robot_cords
         if _robot_cords_tuple is not None:
             self.robot_cords_tuple    = _robot_cords_tuple
+            self.__hash_robot_cords_tuple    = hash(self.robot_cords_tuple)
         if _robots is not None:
             self.robots         = _robots
-
-        self.__hash             = None
+            self.__hash_robots    = hash(self.robots)
+        self.__hash = hash((self.__hash_taps, self.__hash_plants, self.__hash_robots,  self.__hash_robot_cords_tuple))
 
     def __hash__(self):
-        if self.__hash is not None:
-            return self.__hash
-        else:
-            self.__hash = hash((
-                self.taps,
-                self.plants,
-                self.robots,
-                self.robot_cords_tuple))
         return self.__hash
 
     def __eq__(self, other):
