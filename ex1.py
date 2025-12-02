@@ -16,7 +16,7 @@ def distance(cords_1: tuple[int, int], cords_2: tuple[int, int]):
 
 class State:
     size:                       tuple[int, int]
-    walls:                      dict[tuple[int, int], bool]
+    walls:                      frozenset[tuple[int, int]]
     taps:                       dict[tuple[int, int], int]
     plants:                     dict[tuple[int, int], int]
     robots:                     dict[tuple[int, int], tuple[str, int, int]]
@@ -29,7 +29,7 @@ class State:
     @staticmethod
     def create_initial_state(initial):
         State.size      = tuple(initial[KEY_SIZE])
-        State.walls     = dict([((i,j), True) for (i,j) in initial[KEY_WALLS]]) 
+        State.walls     = frozenset((i,j) for (i,j) in initial[KEY_WALLS])
         _robots         = dict(((i,j), (str(id), load, capacity)) for id, (i, j, load, capacity) in initial[KEY_ROBOTS].items())
 
         return State(None,
@@ -107,7 +107,7 @@ class WateringProblem(search.Problem):
         is_move_legal = lambda i,j: (
                 (0 <= i < height)
                 and (0 <= j < width)
-                and not State.walls.get((i,j), False)
+                and not (i,j) in State.walls
                 and not state.robots.get((i,j), False))
 
         # -------------------------------------------------------------------
