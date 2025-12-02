@@ -19,6 +19,12 @@ class State:
     robots:                 tuple[tuple[str, int, int]]
     robot_cords:            set[tuple[int, int]]
     robot_cords_tuple:      tuple[tuple[int, int]]
+
+    total_plant_water_needed: int
+    total_water_available:  int
+    total_load:             int
+
+
     __hash:                 int
     __hash_taps:            int
     __hash_plants:          int
@@ -31,25 +37,35 @@ class State:
                 _plants             : tuple[int]                    | None  = None,
                 _robot_cords        : set[tuple[int, int]]    | None  = None,
                 _robot_cords_tuple  : tuple[tuple[int, int]]        | None  = None,
-                _robots             : tuple[tuple[str, int, int]]   | None  = None):
+                _robots             : tuple[tuple[str, int, int]]   | None  = None,
+                 _total_plant_water_needed: int | None = None,
+                 _total_water_available:  int | None = None,
+                 _total_load:             int | None = None):
 
         if _old_state is not None:
-            self.taps               = _old_state.taps
-            self.plants             = _old_state.plants
-            self.robot_cords        = _old_state.robot_cords
-            self.robot_cords_tuple  = _old_state.robot_cords_tuple
-            self.robots             = _old_state.robots
-            self.__hash_taps        = _old_state.__hash_taps
-            self.__hash_plants        = _old_state.__hash_plants
-            self.__hash_robots        = _old_state.__hash_robots
+            self.taps                       = _old_state.taps
+            self.plants                     = _old_state.plants
+            self.robot_cords                = _old_state.robot_cords
+            self.robot_cords_tuple          = _old_state.robot_cords_tuple
+            self.robots                     = _old_state.robots
+
+            self.__hash_taps                = _old_state.__hash_taps
+            self.__hash_plants              = _old_state.__hash_plants
+            self.__hash_robots              = _old_state.__hash_robots
             self.__hash_robot_cords_tuple   = _old_state.__hash_robot_cords_tuple
+
+            self.total_plant_water_needed   = _old_state.total_plant_water_needed
+            self.total_water_available      = _old_state.total_water_available
+            self.total_load                 = _old_state.total_load
 
         if _taps is not None:
             self.taps           = _taps
             self.__hash_taps    = hash(self.taps)
+            self.total_water_available   = _total_water_available if _total_water_available is not None else sum(_taps)
         if _plants is not None:
             self.plants         = _plants
             self.__hash_plants    = hash(self.plants)
+            self.total_plant_water_needed   = _total_plant_water_needed if _total_plant_water_needed is not None else sum(_plants)
         if _robot_cords is not None:
             self.robot_cords    = _robot_cords
         if _robot_cords_tuple is not None:
@@ -57,7 +73,8 @@ class State:
             self.__hash_robot_cords_tuple    = hash(self.robot_cords_tuple)
         if _robots is not None:
             self.robots         = _robots
-            self.__hash_robots    = hash(self.robots)
+            self.__hash_robots  = hash(self.robots)
+            self.total_load     = _total_load if _total_load is not None else sum(load for (id, load, capacity) in _robots)
         self.__hash = hash((self.__hash_taps, self.__hash_plants, self.__hash_robots,  self.__hash_robot_cords_tuple))
 
     def __hash__(self):
@@ -136,7 +153,9 @@ class WateringProblem(search.Problem):
                         state_new_plants        = tuple_replace(state.plants, entity_index, plant_water_needed - 1)
                         state_new               = State(state,
                                                     _plants = state_new_plants,
-                                                    _robots = state_new_robots)
+                                                    _robots = state_new_robots,
+                                                    _total_load = state.total_load - 1,
+                                                    _total_plant_water_needed = state.total_plant_water_needed - 1)
                         if self.heuristics_cache.get(state_new, None) is None:
                             moves.append((f"POUR{{{id}}}", state_new))
                             if len(state.robots) == 1:
@@ -152,7 +171,9 @@ class WateringProblem(search.Problem):
                         state_new_taps      = tuple_replace(state.taps, entity_index, water_available - 1)
                         state_new           = State(state,
                                                 _robots = state_new_robots,
-                                                _taps   = state_new_taps)
+                                                _taps   = state_new_taps,
+                                                    _total_load = state.total_load + 1,
+                                                    _total_water_available = state.total_water_available - 1)
 
                         if self.heuristics_cache.get(state_new, None) is None:
                             moves.append((f"LOAD{{{id}}}", state_new))
@@ -204,7 +225,6 @@ class WateringProblem(search.Problem):
         # if cached_result is not None:
         #         return cached_result
 
-        total_load                              = 0
         non_satiated_plants_cords               = [plant_cords  for plant_cords     in self.plant_cords_list    if node.state.plants[self.map[plant_cords][1]] > 0]
         non_empty_tap_cords                     = [tap_cords    for tap_cords       in self.tap_cords_list      if node.state.taps[self.map[tap_cords][1]] > 0]
 
@@ -226,10 +246,11 @@ class WateringProblem(search.Problem):
                         distance(robot_cords, plant_cords)
                         for plant_cords in non_satiated_plants_cords)
             min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
-            total_load                              += load
 
-        total_water_available           = sum(node.state.taps)
-        total_plant_water_needed        = sum(node.state.plants)
+        total_plant_water_needed        = node.state.total_plant_water_needed
+        total_water_available           = node.state.total_water_available
+        total_load                      = node.state.total_load
+
         heuristic                       = 2 * total_plant_water_needed - total_load
 
         if total_water_available + total_load < total_plant_water_needed:
@@ -244,7 +265,7 @@ class WateringProblem(search.Problem):
     def h_gbfs(self, node):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
-        return 2 * sum(node.state.plants) - sum(load for id, load, capacity in node.state.robots)
+        return 2 * node.state.total_plant_water_needed - sum(load for id, load, capacity in node.state.robots)
 
 def create_watering_problem(game):
     print("<<create_watering_problem")
