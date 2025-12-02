@@ -17,10 +17,12 @@ class State:
     robot_cords:            set[tuple[int, int]]
     robot_cords_tuple:      tuple[tuple[int, int]]
 
+    non_satiated_plants_cords:  list[tuple[int, int]]
+    non_empty_tap_cords:        list[tuple[int, int]]
+
     total_plant_water_needed: int
     total_water_available:  int
     total_load:             int
-
 
     __hash:                 int
     __hash_taps:            int
@@ -32,12 +34,14 @@ class State:
                 _old_state                                                  = None,
                 _taps               : tuple[int]                    | None  = None,
                 _plants             : tuple[int]                    | None  = None,
-                _robot_cords        : set[tuple[int, int]]    | None  = None,
+                _robot_cords        : set[tuple[int, int]]          | None  = None,
                 _robot_cords_tuple  : tuple[tuple[int, int]]        | None  = None,
                 _robots             : tuple[tuple[str, int, int]]   | None  = None,
                  _total_plant_water_needed: int | None = None,
                  _total_water_available:  int | None = None,
-                 _total_load:             int | None = None):
+                 _total_load:             int | None = None,
+                 _non_satiated_plants_cords:  list[tuple[int, int]] | None = None,
+                 _non_empty_tap_cords:        list[tuple[int, int]] | None = None):
 
         if _old_state is not None:
             self.taps                       = _old_state.taps
@@ -55,23 +59,37 @@ class State:
             self.total_water_available      = _old_state.total_water_available
             self.total_load                 = _old_state.total_load
 
+            self.non_satiated_plants_cords  = _old_state.non_satiated_plants_cords
+            self.non_empty_tap_cords        = _old_state.non_empty_tap_cords
+
+        if _non_satiated_plants_cords is not None:
+            self.non_satiated_plants_cords = _non_satiated_plants_cords
+
+        if _non_empty_tap_cords is not None:
+            self.non_empty_tap_cords = _non_empty_tap_cords
+
         if _taps is not None:
             self.taps           = _taps
             self.__hash_taps    = hash(self.taps)
             self.total_water_available   = _total_water_available if _total_water_available is not None else sum(_taps)
+
         if _plants is not None:
             self.plants         = _plants
             self.__hash_plants    = hash(self.plants)
             self.total_plant_water_needed   = _total_plant_water_needed if _total_plant_water_needed is not None else sum(_plants)
+
         if _robot_cords is not None:
             self.robot_cords    = _robot_cords
+
         if _robot_cords_tuple is not None:
             self.robot_cords_tuple    = _robot_cords_tuple
             self.__hash_robot_cords_tuple    = hash(self.robot_cords_tuple)
+
         if _robots is not None:
             self.robots         = _robots
             self.__hash_robots  = hash(self.robots)
             self.total_load     = _total_load if _total_load is not None else sum(load for (id, load, capacity) in _robots)
+
         self.__hash = hash((self.__hash_taps, self.__hash_plants, self.__hash_robots,  self.__hash_robot_cords_tuple))
 
     def __hash__(self):
@@ -121,11 +139,17 @@ class WateringProblem(search.Problem):
         for wall_cords in initial[KEY_WALLS]:
             self.map[wall_cords]    = ("wall", -1)
 
+        taps                        = tuple(tap_values)
+        plants                      = tuple(plant_values)
+        non_empty_taps              = [tap_cords    for tap_cords       in self.tap_cords_list      if taps[self.map[tap_cords][1]] > 0]
+        non_satiated_plants_cords   = [plant_cords  for plant_cords     in self.plant_cords_list    if plants[self.map[plant_cords][1]] > 0]
         self.initial                = State(_taps               = tuple(tap_values),
                                             _plants             = tuple(plant_values),
                                             _robot_cords        = robot_cords,
                                             _robot_cords_tuple  = robot_cords_tuple,
-                                            _robots             = robots)
+                                            _robots             = robots,
+                                            _non_empty_tap_cords     = non_empty_taps,
+                                            _non_satiated_plants_cords = non_satiated_plants_cords)
         self.bfs_distances          = {}
         for cords in self.tap_cords_list:
             self.bfs(cords)
@@ -175,6 +199,7 @@ class WateringProblem(search.Problem):
                 and (i,j) not in state.robot_cords)
 
         tuple_replace           = lambda t, index, new_value: t[:index] + (new_value,) + t[index+1:]
+        tuple_remove            = lambda t, index: t[:index] + t[index+1:]
 
         for index, (id, load, capacity) in enumerate(state.robots):
             (i,j) = state.robot_cords_tuple[index]
@@ -186,14 +211,20 @@ class WateringProblem(search.Problem):
                     if plant_water_needed > 0:
                         state_new_robots        = tuple_replace(state.robots, index, (id, load - 1, capacity))
                         state_new_plants        = tuple_replace(state.plants, entity_index, plant_water_needed - 1)
+
+                        non_satiated_plants_cords       = None
+                        if plant_water_needed == 1:
+                            non_satiated_plants_cords   = [plant_cords  for plant_cords     in self.plant_cords_list    if state_new_plants[self.map[plant_cords][1]] > 0]
+
                         state_new               = State(state,
                                                     _plants = state_new_plants,
                                                     _robots = state_new_robots,
                                                     _total_load = state.total_load - 1,
-                                                    _total_plant_water_needed = state.total_plant_water_needed - 1)
+                                                    _total_plant_water_needed = state.total_plant_water_needed - 1,
+                                                    _non_satiated_plants_cords = non_satiated_plants_cords)
                         if self.heuristics_cache.get(state_new, None) is None:
                             moves.append((f"POUR{{{id}}}", state_new))
-                            if len(state.robots) == 1:
+                            if len(state.robots) == 1 or len(state.non_satiated_plants_cords) == 1:
                                 continue
 
             remaining_capacity = capacity - load
@@ -204,15 +235,20 @@ class WateringProblem(search.Problem):
                     if water_available > 0:
                         state_new_robots    = tuple_replace(state.robots, index, (id, load + 1, capacity))
                         state_new_taps      = tuple_replace(state.taps, entity_index, water_available - 1)
+                        state_new_non_empty_taps = None
+                        if water_available == 1:
+                            state_new_non_empty_taps = [tap_cords    for tap_cords       in self.tap_cords_list      if state_new_taps[self.map[tap_cords][1]] > 0]
+
                         state_new           = State(state,
                                                 _robots = state_new_robots,
                                                 _taps   = state_new_taps,
-                                                    _total_load = state.total_load + 1,
-                                                    _total_water_available = state.total_water_available - 1)
+                                                _total_load = state.total_load + 1,
+                                                _total_water_available = state.total_water_available - 1,
+                                                _non_empty_tap_cords = state_new_non_empty_taps)
 
                         if self.heuristics_cache.get(state_new, None) is None:
                             moves.append((f"LOAD{{{id}}}", state_new))
-                            if len(state.robots) == 1:
+                            if len(state.robots) == 1 and load < state_new.total_plant_water_needed:
                                 continue
             if is_move_legal(i+1, j):
                 state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i+1,j))
@@ -259,11 +295,7 @@ class WateringProblem(search.Problem):
         # cached_result = self.heuristics_cache.get(node.state, None)
         # if cached_result is not None:
         #         return cached_result
-
-        non_satiated_plants_cords               = [plant_cords  for plant_cords     in self.plant_cords_list    if node.state.plants[self.map[plant_cords][1]] > 0]
-        non_empty_tap_cords                     = [tap_cords    for tap_cords       in self.tap_cords_list      if node.state.taps[self.map[tap_cords][1]] > 0]
-
-        if not non_satiated_plants_cords:
+        if not node.state.non_satiated_plants_cords:
             return 0
 
         min_robot_contribution_distance         = float('inf')
@@ -271,15 +303,15 @@ class WateringProblem(search.Problem):
             robot_cords = node.state.robot_cords_tuple[index]
             current_robot_contribution_distance = float('inf')
             if load == 0:
-                if non_empty_tap_cords:
+                if node.state.non_empty_tap_cords:
                     current_robot_contribution_distance  = min(
                         self.distance(tap_cords, robot_cords) + self.distance(tap_cords, plant_cords)
-                        for tap_cords in non_empty_tap_cords
-                        for plant_cords in non_satiated_plants_cords)
+                        for tap_cords in node.state.non_empty_tap_cords
+                        for plant_cords in node.state.non_satiated_plants_cords)
             else:
                 current_robot_contribution_distance  = min(
                         self.distance(plant_cords, robot_cords)
-                        for plant_cords in non_satiated_plants_cords)
+                        for plant_cords in node.state.non_satiated_plants_cords)
             min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
 
         total_plant_water_needed        = node.state.total_plant_water_needed
