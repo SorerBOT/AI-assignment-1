@@ -12,6 +12,16 @@ KEY_ROBOTS  = "Robots"
 
 # BFS: calculate distance to all taps as we do at this moment, and then calculate the distance from every tap, to WHATEVER plant using multi-search
 
+
+#
+# 1. Why did pruning visited states work? What about g?
+# 2. Heuristic which takes into consideration entire paths (to satiate all plants) instead of the minimum effort in order to contribute.
+# 3. Add walls to remove redundant paths
+# 4. Can we break admissibility when we already visited the state with a higher g value?
+#
+#
+
+
 class State:
     taps:                   tuple[int]
     plants:                 tuple[int]
@@ -113,7 +123,7 @@ class WateringProblem(search.Problem):
     """This class implements a pressure plate problem"""
     size:               tuple[int, int]
     initial:            State
-    heuristics_cache:   dict[State, float]
+    heuristics_cache:   dict[State, tuple[float, int]] # float is the heuristic itself, int is the least number of steps taken in order to reach this state
     map:                dict[tuple[int, int], tuple[str, int]]
     plant_cords_list:   list[tuple[int, int]]
     tap_cords_list:     list[tuple[int, int]]
@@ -274,10 +284,10 @@ class WateringProblem(search.Problem):
                                                     _total_plant_water_needed = state.total_plant_water_needed - 1,
                                                     _non_satiated_plants_cords = non_satiated_plants_cords,
                                                     _robot_last_actions = state_new_last_actions)
-                        if self.heuristics_cache.get(state_new, None) is None:
-                            moves.append((action_name, state_new))
-                            if len(state.robots) == 1 or len(state.non_satiated_plants_cords) == 1 or load >= state.total_plant_water_needed:
-                                continue
+                        #if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
+                        if len(state.robots) == 1 or len(state.non_satiated_plants_cords) == 1 or load >= state.total_plant_water_needed:
+                            continue
 
             remaining_capacity = capacity - load
             if remaining_capacity > 0 and state.total_load < state.total_plant_water_needed:
@@ -301,12 +311,12 @@ class WateringProblem(search.Problem):
                                                 _non_empty_tap_cords = state_new_non_empty_taps,
                                                 _robot_last_actions = state_new_last_actions)
 
-                        if self.heuristics_cache.get(state_new, None) is None:
-                            moves.append((action_name, state_new))
-                            if len(state.robots) == 1:
-                                continue
-                            if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name): # and last action was LOAD, then keep LOADing
-                                continue
+                        #if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
+                        if len(state.robots) == 1:
+                            continue
+                        if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name): # and last action was LOAD, then keep LOADing
+                            continue
 
             if is_move_legal(i-1, j):
                 opposite_action = f"DOWN{{{id}}}"
@@ -320,8 +330,8 @@ class WateringProblem(search.Problem):
                     state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                     state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
+                    #if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((action_name, state_new))
 
             if is_move_legal(i+1, j):
                 opposite_action = f"UP{{{id}}}"
@@ -335,8 +345,8 @@ class WateringProblem(search.Problem):
                     state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                     state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
+                    #if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((action_name, state_new))
 
             if is_move_legal(i, j-1):
                 opposite_action = f"RIGHT{{{id}}}"
@@ -350,8 +360,8 @@ class WateringProblem(search.Problem):
                     state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                     state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
+                    #if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((action_name, state_new))
 
             if is_move_legal(i, j+1):
                 opposite_action = f"LEFT{{{id}}}"
@@ -365,8 +375,8 @@ class WateringProblem(search.Problem):
                     state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                     state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
+                    #if self.heuristics_cache.get(state_new, None) is None:
+                    moves.append((action_name, state_new))
 
         return moves
 
@@ -378,22 +388,26 @@ class WateringProblem(search.Problem):
         """ This is the heuristic. It gets a node (not a state)
         and returns a goal distance estimate"""
 
-        # cached_result = self.heuristics_cache.get(node.state, None)
-        # if cached_result is not None:
- 
         total_load                      = node.state.total_load
         total_plant_water_needed        = node.state.total_plant_water_needed
         total_water_available           = node.state.total_water_available
 
+        # Cheaper than querying the cache...
         if not node.state.non_satiated_plants_cords:
-            self.heuristics_cache[node.state] = 0
             return 0
-
-
         if total_water_available + total_load < total_plant_water_needed:
-            self.heuristics_cache[node.state] = float('inf')
             return float('inf')
 
+        cached_result = self.heuristics_cache.get(node.state, None)
+        if cached_result is not None:
+            (value, path_cost)          = cached_result
+            if path_cost < node.path_cost:
+                return value
+                #return float('inf')
+            else:
+                self.heuristics_cache[node.state] = (value, node.path_cost)
+                return value
+ 
         min_robot_contribution_distance         = float('inf')
         for index, (id, load, capacity) in enumerate(node.state.robots):
             robot_cords = node.state.robot_cords_tuple[index]
@@ -429,9 +443,8 @@ class WateringProblem(search.Problem):
 
         heuristic += min_robot_contribution_distance
 
-        self.heuristics_cache[node.state] = heuristic
+        self.heuristics_cache[node.state] = (heuristic, node.path_cost)
         return heuristic
-
 
     def h_gbfs(self, node):
         """ This is the heuristic. It gets a node (not a state)
