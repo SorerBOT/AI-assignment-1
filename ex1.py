@@ -243,8 +243,9 @@ class WateringProblem(search.Problem):
         is_move_legal = lambda i,j: (
                 (0 <= i < height)
                 and (0 <= j < width)
-                and self.map.get((i,j), (None, -1))[0] != "wall"
-                and (i,j) not in state.robot_cords)
+                and self.map.get((i,j), (None, -1))[0] != "wall")
+
+        is_there_robot          = lambda i,j: (i,j) in state.robot_cords
 
         tuple_replace           = lambda t, index, new_value: t[:index] + (new_value,) + t[index+1:]
         tuple_remove            = lambda t, index: t[:index] + t[index+1:]
@@ -308,44 +309,64 @@ class WateringProblem(search.Problem):
                                 continue
 
             if is_move_legal(i-1, j):
-                state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i-1,j))
-                state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                action_name             = f"UP{{{id}}}"
-                state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
-                state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
+                opposite_action = f"DOWN{{{id}}}"
+                if is_there_robot(i+1, j):
+                    if state.robot_last_actions[index] == opposite_action:
+                        state.robot_last_actions = tuple_replace(state.robot_last_actions, index, "")
+                if not is_there_robot(i-1, j) and state.robot_last_actions[index] != opposite_action:
+                    state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i-1,j))
+                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
+                    action_name             = f"UP{{{id}}}"
+                    state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
+                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                if self.heuristics_cache.get(state_new, None) is None:
-                    moves.append((action_name, state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
 
             if is_move_legal(i+1, j):
-                state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i+1,j))
-                state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                action_name             = f"DOWN{{{id}}}"
-                state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
-                state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
+                opposite_action = f"UP{{{id}}}"
+                if is_there_robot(i-1, j):
+                    if state.robot_last_actions[index] == opposite_action:
+                        state.robot_last_actions = tuple_replace(state.robot_last_actions, index, "")
+                if not is_there_robot(i+1,j) and state.robot_last_actions[index] != opposite_action:
+                    state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i+1,j))
+                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
+                    action_name             = f"DOWN{{{id}}}"
+                    state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
+                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                if self.heuristics_cache.get(state_new, None) is None:
-                    moves.append((action_name, state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
 
             if is_move_legal(i, j-1):
-                state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i,j-1))
-                state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                action_name             = f"LEFT{{{id}}}"
-                state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
-                state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
+                opposite_action = f"RIGHT{{{id}}}"
+                if is_there_robot(i, j+1):
+                    if state.robot_last_actions[index] == opposite_action:
+                        state.robot_last_actions = tuple_replace(state.robot_last_actions, index, "")
+                if not is_there_robot(i,j-1) and state.robot_last_actions[index] != opposite_action:
+                    state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i,j-1))
+                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
+                    action_name             = f"LEFT{{{id}}}"
+                    state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
+                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                if self.heuristics_cache.get(state_new, None) is None:
-                    moves.append((action_name, state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
 
             if is_move_legal(i, j+1):
-                state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i,j+1))
-                state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                action_name             = f"RIGHT{{{id}}}"
-                state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
-                state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
+                opposite_action = f"LEFT{{{id}}}"
+                if is_there_robot(i, j-1):
+                    if state.robot_last_actions[index] == opposite_action:
+                        state.robot_last_actions = tuple_replace(state.robot_last_actions, index, "")
+                if not is_there_robot(i,j+1) and state.robot_last_actions[index] != opposite_action:
+                    state_new_robot_cords_tuple = tuple_replace(state.robot_cords_tuple, index, (i,j+1))
+                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
+                    action_name             = f"RIGHT{{{id}}}"
+                    state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
+                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions)
 
-                if self.heuristics_cache.get(state_new, None) is None:
-                    moves.append((action_name, state_new))
+                    if self.heuristics_cache.get(state_new, None) is None:
+                        moves.append((action_name, state_new))
 
         return moves
 
