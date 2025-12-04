@@ -32,6 +32,8 @@ class State:
     total_plant_water_needed    : int
     total_water_available       : int
     total_load                  : int
+    #min_plant                   : int # we will use this instead of calculating the minimum need of a plant every time
+
 
     __hash                      : int
     __hash_taps                 : int
@@ -313,7 +315,7 @@ class WateringProblem(search.Problem):
                         moves.append((action_name, state_new))
                         if len(state.robots) == 1:
                             continue
-                        if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name): # and last action was LOAD, then keep LOADing
+                        if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name) and load < min(state.plants): # and last action was LOAD, then keep LOADing
                             continue
 
             if is_move_legal(i-1, j):
