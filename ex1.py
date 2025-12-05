@@ -10,15 +10,6 @@ KEY_TAPS    = "Taps"
 KEY_PLANTS  = "Plants"
 KEY_ROBOTS  = "Robots"
 
-# BFS: calculate distance to all taps as we do at this moment, and then calculate the distance from every tap, to WHATEVER plant using multi-search
-
-#
-# 1. Why did pruning visited states work? What about g?
-# 2. Heuristic which takes into consideration entire paths (to satiate all plants) instead of the minimum effort in order to contribute.
-# 3. Add walls to remove redundant paths
-# 4. Can we break admissibility when we already visited the state with a higher g value?
-#
-
 class State:
     taps                        : tuple[int]
     plants                      : tuple[int]
@@ -26,7 +17,7 @@ class State:
     robot_cords                 : set[tuple[int, int]]
     robot_cords_tuple           : tuple[tuple[int, int]]
 
-    active_robot                : int | None = None
+    active_robot                = None # int | None = None
     robot_last_actions          : tuple[str] 
 
     non_satiated_plants_cords   : list[tuple[int, int]]
@@ -35,7 +26,6 @@ class State:
     total_plant_water_needed    : int
     total_water_available       : int
     total_load                  : int
-    #min_plant                   : int # we will use this instead of calculating the minimum need of a plant every time
 
     __hash                      : int
     __hash_taps                 : int
@@ -45,19 +35,19 @@ class State:
 
 
     def __init__(self,
-                _old_state                                                          = None,
-                _taps                       : tuple[int]                    | None  = None,
-                _plants                     : tuple[int]                    | None  = None,
-                _robot_cords                : set[tuple[int, int]]          | None  = None,
-                _robot_cords_tuple          : tuple[tuple[int, int]]        | None  = None,
-                _robots                     : tuple[tuple[str, int, int]]   | None  = None,
-                _total_plant_water_needed   : int                           | None  = None,
-                _total_water_available      : int                           | None  = None,
-                _total_load                 : int                           | None  = None,
-                _non_satiated_plants_cords  : list[tuple[int, int]]         | None  = None,
-                _non_empty_tap_cords        : list[tuple[int, int]]         | None  = None,
-                _robot_last_actions         : tuple[str]                    | None  = None,
-                 _active_robot              : int                           | None  = None):
+                _old_state                  = None,
+                _taps                       = None,#: tuple[int]                    | None  = None,
+                _plants                     = None,#: tuple[int]                    | None  = None,
+                _robot_cords                = None,#: set[tuple[int, int]]          | None  = None,
+                _robot_cords_tuple          = None,#: tuple[tuple[int, int]]        | None  = None,
+                _robots                     = None,#: tuple[tuple[str, int, int]]   | None  = None,
+                _total_plant_water_needed   = None,#: int                           | None  = None,
+                _total_water_available      = None,#: int                           | None  = None,
+                _total_load                 = None,#: int                           | None  = None,
+                _non_satiated_plants_cords  = None,#: list[tuple[int, int]]         | None  = None,
+                _non_empty_tap_cords        = None,#: list[tuple[int, int]]         | None  = None,
+                _robot_last_actions         = None,#: tuple[str]                    | None  = None,
+                _active_robot               = None):#: int                           | None  = None):
 
         if _old_state is not None:
             self.taps                       = _old_state.taps
@@ -79,37 +69,37 @@ class State:
             self.non_empty_tap_cords        = _old_state.non_empty_tap_cords
 
         if _non_satiated_plants_cords is not None:
-            self.non_satiated_plants_cords = _non_satiated_plants_cords
+            self.non_satiated_plants_cords  = _non_satiated_plants_cords
 
         if _non_empty_tap_cords is not None:
-            self.non_empty_tap_cords = _non_empty_tap_cords
+            self.non_empty_tap_cords        = _non_empty_tap_cords
 
         if _taps is not None:
-            self.taps           = _taps
-            self.__hash_taps    = hash(self.taps)
-            self.total_water_available   = _total_water_available if _total_water_available is not None else sum(_taps)
+            self.taps                       = _taps
+            self.__hash_taps                = hash(self.taps)
+            self.total_water_available      = _total_water_available if _total_water_available is not None else sum(_taps)
 
         if _plants is not None:
-            self.plants         = _plants
-            self.__hash_plants    = hash(self.plants)
+            self.plants                     = _plants
+            self.__hash_plants              = hash(self.plants)
             self.total_plant_water_needed   = _total_plant_water_needed if _total_plant_water_needed is not None else sum(_plants)
 
         if _robot_cords is not None:
-            self.robot_cords    = _robot_cords
+            self.robot_cords                = _robot_cords
 
         if _robot_cords_tuple is not None:
-            self.robot_cords_tuple    = _robot_cords_tuple
-            self.__hash_robot_cords_tuple    = hash(self.robot_cords_tuple)
+            self.robot_cords_tuple          = _robot_cords_tuple
+            self.__hash_robot_cords_tuple   = hash(self.robot_cords_tuple)
 
         if _robots is not None:
-            self.robots         = _robots
-            self.__hash_robots  = hash(self.robots)
-            self.total_load     = _total_load if _total_load is not None else sum(load for (id, load, capacity) in _robots)
+            self.robots                     = _robots
+            self.__hash_robots              = hash(self.robots)
+            self.total_load                 = _total_load if _total_load is not None else sum(load for (id, load, capacity) in _robots)
 
         if _robot_last_actions is not None:
-            self.robot_last_actions = _robot_last_actions
+            self.robot_last_actions         = _robot_last_actions
 
-        self.active_robot   = _active_robot
+        self.active_robot                   = _active_robot
 
         self.__hash = hash((self.__hash_taps, self.__hash_plants, self.__hash_robots,  self.__hash_robot_cords_tuple))
 
