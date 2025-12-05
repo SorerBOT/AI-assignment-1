@@ -11,13 +11,22 @@ KEY_PLANTS  = "Plants"
 KEY_ROBOTS  = "Robots"
 
 class State:
+    __slots__ = (
+        'taps', 'plants', 'robots', 'robot_cords', 'robot_cords_tuple',
+        'active_robot', 'robot_last_actions', 'non_satiated_plants_cords',
+        'non_empty_tap_cords', 'total_plant_water_needed',
+        'total_water_available', 'total_load',
+        '__hash', '__hash_taps', '__hash_plants',
+        '__hash_robots', '__hash_robot_cords_tuple'
+    )
+
     taps                        : tuple[int]
     plants                      : tuple[int]
     robots                      : tuple[tuple[str, int, int]]
     robot_cords                 : set[tuple[int, int]]
     robot_cords_tuple           : tuple[tuple[int, int]]
 
-    active_robot                = None # int | None = None
+    # active_robot                = None # int | None = None
     robot_last_actions          : tuple[str] 
 
     non_satiated_plants_cords   : list[tuple[int, int]]
@@ -254,12 +263,17 @@ class WateringProblem(search.Problem):
         tuple_replace           = lambda t, index, new_value: t[:index] + (new_value,) + t[index+1:]
         tuple_remove            = lambda t, index: t[:index] + t[index+1:]
 
+        map                     = self.map
+        plant_cords_list        = self.plant_cords_list
+        tap_cords_list          = self.tap_cords_list
+
+
         for index, (id, load, capacity) in enumerate(state.robots):
             (i,j) = state.robot_cords_tuple[index]
             entity_res          = None
 
             if load > 0:
-                (entity_type, entity_index) = entity_res = self.map.get((i,j), (None, -1))
+                (entity_type, entity_index) = entity_res = map.get((i,j), (None, -1))
                 if entity_type == "plant":
                     plant_water_needed = state.plants[entity_index]
                     if plant_water_needed > 0:
@@ -269,7 +283,7 @@ class WateringProblem(search.Problem):
                         state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                         non_satiated_plants_cords       = None
                         if plant_water_needed == 1:
-                            non_satiated_plants_cords   = [plant_cords  for plant_cords     in self.plant_cords_list    if state_new_plants[self.map[plant_cords][1]] > 0]
+                            non_satiated_plants_cords   = [plant_cords  for plant_cords     in plant_cords_list    if state_new_plants[map[plant_cords][1]] > 0]
 
                         new_active_robot        = None if load - 1 == 0 else index
                         state_new               = State(state,
@@ -288,7 +302,7 @@ class WateringProblem(search.Problem):
             if state.active_robot is None or state.active_robot == index:
                 remaining_capacity = capacity - load
                 if remaining_capacity > 0 and state.total_load < state.total_plant_water_needed:
-                    (entity_type, entity_index) = entity_res if entity_res else self.map.get((i,j), (None, -1))
+                    (entity_type, entity_index) = entity_res if entity_res else map.get((i,j), (None, -1))
                     if entity_type == "tap":
                         water_available = state.taps[entity_index]
                         if water_available > 0:
@@ -298,7 +312,7 @@ class WateringProblem(search.Problem):
                             state_new_last_actions = tuple_replace(state.robot_last_actions, index, action_name)
                             state_new_non_empty_taps = None
                             if water_available == 1:
-                                state_new_non_empty_taps = [tap_cords    for tap_cords       in self.tap_cords_list      if state_new_taps[self.map[tap_cords][1]] > 0]
+                                state_new_non_empty_taps = [tap_cords    for tap_cords       in tap_cords_list      if state_new_taps[map[tap_cords][1]] > 0]
 
                             state_new           = State(state,
                                                     _robots                 = state_new_robots,
