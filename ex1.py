@@ -407,42 +407,57 @@ class WateringProblem(search.Problem):
     def goal_test(self, state: State):
         """ given a state, checks if this is the goal state, compares to the created goal state returns True/False"""
         return all(not plant_water_needed for plant_water_needed in state.plants)
-
-    def h_astar(self, node):
-        """ This is the heuristic. It gets a node (not a state)
-        and returns a goal distance estimate"""
-
-        INF                             = float('inf')
-        total_load                      = node.state.total_load
-        total_plant_water_needed        = node.state.total_plant_water_needed
-        total_water_available           = node.state.total_water_available
-
-        # Cheaper than querying the cache...
-        if not node.state.non_satiated_plants_cords:
+    def h_astar_temp(self, node):
+        state = node.state # Local var access is faster than dot access
+        
+        # 1. Quick exits
+        if not state.non_satiated_plants_cords:
             return 0
-        if total_water_available + total_load < total_plant_water_needed:
-            return INF
+        
+        # Localize variables for speed
+        total_load = state.total_load
+        total_plant_water_needed = state.total_plant_water_needed
+        
+        if state.total_water_available + total_load < total_plant_water_needed:
+            return float('inf')
 
-        cached_result = self.heuristics_cache.get(node.state, None)
+        # 2. Check Cache
+        heuristics_cache = self.heuristics_cache
+        cached_result = heuristics_cache.get(state, None)
+        
         if cached_result is not None:
-            (value, path_cost)          = cached_result
+            (value, path_cost) = cached_result
             if path_cost < node.path_cost:
                 return value
-                #return INF
             else:
-                self.heuristics_cache[node.state] = (value, node.path_cost)
+                heuristics_cache[state] = (value, node.path_cost)
                 return value
- 
-        min_robot_contribution_distance         = INF
-        for index, (id, load, capacity) in enumerate(node.state.robots):
-            robot_cords = node.state.robot_cords_tuple[index]
+
+        # 3. Calculation
+        # OPTIMIZATION: direct dict access + local constant
+        dist_lookup = self.bfs_distances.get 
+        plant_dist_lookup = self.bfs_to_whatever_plant_distances.get
+        INF = float('inf')
+
+        min_robot_contribution_distance = INF
+        
+        # We access these lists frequently in the loop
+        non_empty_taps = state.non_empty_tap_cords
+        non_satiated_plants = state.non_satiated_plants_cords
+
+        for index, (id, load, capacity) in enumerate(state.robots):
+            robot_cords = state.robot_cords_tuple[index]
             current_robot_contribution_distance = INF
             distance_tap_then_plant = None
+            
             if load == 0:
-                if node.state.non_empty_tap_cords:
+                if non_empty_taps:
+                    # Inlined distance logic
                     distance_tap_then_plant = min(
-                        self.distance(tap_cords, robot_cords) + self.distance_nearest_plant(tap_cords)
-                        for tap_cords in node.state.non_empty_tap_cords)
+                        (dist_lookup((tap_cords, robot_cords), INF) + 
+                         plant_dist_lookup(tap_cords, INF))
+                        for tap_cords in non_empty_taps
+                    )
                     current_robot_contribution_distance = distance_tap_then_plant
                 else:
                     current_robot_contribution_distance = INF
@@ -450,16 +465,82 @@ class WateringProblem(search.Problem):
                 if total_load < total_plant_water_needed:
                     if not distance_tap_then_plant:
                         distance_tap_then_plant = min(
-                        self.distance(tap_cords, robot_cords) + self.distance_nearest_plant(tap_cords)
-                        for tap_cords in node.state.non_empty_tap_cords)
+                            (dist_lookup((tap_cords, robot_cords), INF) + 
+                             plant_dist_lookup(tap_cords, INF))
+                            for tap_cords in non_empty_taps
+                        )
 
-                    current_robot_contribution_distance  = min(
-                            self.distance(plant_cords, robot_cords) + self.distance(plant_cords, tap_cords) # for some reason calculating the distance for the second plant makes it slower
-                            for tap_cords       in node.state.non_empty_tap_cords
-                            for plant_cords     in node.state.non_satiated_plants_cords)
+                    # THIS is the heaviest loop. Direct lookup saves time.
+                    dist_to_plant_and_tap = min(
+                        (dist_lookup((plant_cords, robot_cords), INF) + 
+                         dist_lookup((plant_cords, tap_cords), INF))
+                        for tap_cords in non_empty_taps
+                        for plant_cords in non_satiated_plants
+                    )
+                    current_robot_contribution_distance = min(distance_tap_then_plant, dist_to_plant_and_tap)
+                else:
+                    current_robot_contribution_distance = plant_dist_lookup(robot_cords, INF)
+            
+            if current_robot_contribution_distance < min_robot_contribution_distance:
+                min_robot_contribution_distance = current_robot_contribution_distance
+
+        heuristic = (2 * total_plant_water_needed - total_load) + min_robot_contribution_distance
+
+        heuristics_cache[state] = (heuristic, node.path_cost)
+        return heuristic
+    def h_astar(self, node):
+        """ This is the heuristic. It gets a node (not a state)
+        and returns a goal distance estimate"""
+
+        INF                             = float('inf')
+        state                           = node.state
+        total_load                      = state.total_load
+        total_plant_water_needed        = state.total_plant_water_needed
+        total_water_available           = state.total_water_available
+
+        # Cheaper than querying the cache...
+        if not state.non_satiated_plants_cords:
+            return 0
+        if total_water_available + total_load < total_plant_water_needed:
+            return INF
+
+        cached_result = self.heuristics_cache.get(state, None)
+        if cached_result is not None:
+            (value, path_cost)          = cached_result
+            if path_cost < node.path_cost:
+                return value
+                #return INF
+            else:
+                self.heuristics_cache[state] = (value, node.path_cost)
+                return value
+ 
+        min_robot_contribution_distance         = INF
+        get_dist                                = self.bfs_distances.get
+        get_plant_dist                          = self.bfs_to_whatever_plant_distances.get
+
+        for index, (id, load, capacity) in enumerate(state.robots):
+            robot_cords = state.robot_cords_tuple[index]
+            current_robot_contribution_distance = INF
+            distance_tap_then_plant = INF
+
+            if state.non_empty_tap_cords:
+                distance_tap_then_plant = min(
+                        (get_dist((tap_cords, robot_cords), INF)) + get_plant_dist(tap_cords, INF)
+                        for tap_cords in state.non_empty_tap_cords)
+
+            if load == 0:
+                    current_robot_contribution_distance = distance_tap_then_plant
+            else:
+                if total_load < total_plant_water_needed:
+                    current_robot_contribution_distance = INF
+                    if state.non_empty_tap_cords and state.non_satiated_plants_cords:
+                        current_robot_contribution_distance  = min(
+                                (get_dist((plant_cords, robot_cords), INF)) + (get_dist((plant_cords, tap_cords), INF)) # for some reason calculating the distance for the second plant makes it slower
+                                for tap_cords       in state.non_empty_tap_cords
+                                for plant_cords     in state.non_satiated_plants_cords)
                     current_robot_contribution_distance = min(distance_tap_then_plant, current_robot_contribution_distance)
                 else:
-                    current_robot_contribution_distance  = self.distance_nearest_plant(robot_cords)
+                    current_robot_contribution_distance  = get_plant_dist(robot_cords, INF)
             min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
 
         heuristic                       = 2 * total_plant_water_needed - total_load
@@ -468,7 +549,7 @@ class WateringProblem(search.Problem):
 
         heuristic += min_robot_contribution_distance
 
-        self.heuristics_cache[node.state] = (heuristic, node.path_cost)
+        self.heuristics_cache[state] = (heuristic, node.path_cost)
         return heuristic
 
     def h_gbfs(self, node):
