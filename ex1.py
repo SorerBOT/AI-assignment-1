@@ -11,9 +11,6 @@ KEY_TAPS    = "Taps"
 KEY_PLANTS  = "Plants"
 KEY_ROBOTS  = "Robots"
 
-def distance(cords_1: tuple[int, int], cords_2: tuple[int, int]):
-    return abs(cords_1[0] - cords_2[0]) + abs(cords_1[1] - cords_2[1])
-
 class State:
     size:                       tuple[int, int]
     walls:                      frozenset[tuple[int, int]]
@@ -82,7 +79,8 @@ class State:
         return (
             self.taps   == other.taps   and
             self.plants == other.plants and
-            self.robots == other.robots)
+            self.robots == other.robots and
+            self.robot_cords_tuple == other.robot_cords_tuple)
 
 class WateringProblem(search.Problem):
     """This class implements a pressure plate problem"""
@@ -261,22 +259,52 @@ class WateringProblem(search.Problem):
         non_satiated_plants_cords               = [plant_cords  for plant_cords, plant_water_needed in state.plants.items()    if plant_water_needed > 0]
         non_empty_tap_cords                     = [tap_cords    for tap_cords, water_available      in state.taps.items()      if water_available > 0]
 
-        if not non_satiated_plants_cords:
+        # Cheaper than querying the cache...
+        if not state.non_satiated_plants_cords:
             return 0
+        if total_water_available + total_load < total_plant_water_needed:
+            return INF
+
+        cached_result = self.heuristics_cache.get(state, None)
+        if cached_result is not None:
+            (value, path_cost)          = cached_result
+            if path_cost < node.path_cost:
+                return value
+                #return INF
+            else:
+                self.heuristics_cache[state] = (value, node.path_cost)
+                return value
+ 
+        min_robot_contribution_distance         = INF
+        get_dist                                = self.bfs_distances.get
+        get_plant_dist                          = self.bfs_to_whatever_plant_distances.get
+
+        for index, (id, load, capacity) in enumerate(state.robots):
+            robot_cords = state.robot_cords_tuple[index]
+            current_robot_contribution_distance = INF
+            distance_tap_then_plant = INF
+
+            if state.non_empty_tap_cords:
+                distance_tap_then_plant = min(
+                        (get_dist((tap_cords, robot_cords), INF)) + get_plant_dist(tap_cords, INF)
+                        for tap_cords in state.non_empty_tap_cords)
 
         min_robot_contribution_distance         = float('inf')
         for robot_cords, (id, load, capacity) in state.robots.items():
             current_robot_contribution_distance = float('inf')
             if load == 0:
-                if non_empty_tap_cords:
-                    current_robot_contribution_distance  = min(
-                        distance(robot_cords, tap_cords) + distance(tap_cords, plant_cords)
-                        for tap_cords in non_empty_tap_cords
-                        for plant_cords in non_satiated_plants_cords)
+                    current_robot_contribution_distance = distance_tap_then_plant
             else:
-                current_robot_contribution_distance  = min(
-                        distance(robot_cords, plant_cords)
-                        for plant_cords in non_satiated_plants_cords)
+                if total_load < total_plant_water_needed:
+                    current_robot_contribution_distance = INF
+                    if state.non_empty_tap_cords and state.non_satiated_plants_cords:
+                        current_robot_contribution_distance  = min(
+                                (get_dist((plant_cords, robot_cords), INF)) + (get_dist((plant_cords, tap_cords), INF)) # for some reason calculating the distance for the second plant makes it slower
+                                for tap_cords       in state.non_empty_tap_cords
+                                for plant_cords     in state.non_satiated_plants_cords)
+                    current_robot_contribution_distance = min(distance_tap_then_plant, current_robot_contribution_distance)
+                else:
+                    current_robot_contribution_distance  = get_plant_dist(robot_cords, INF)
             min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
             total_load                      += load
 
@@ -284,14 +312,13 @@ class WateringProblem(search.Problem):
         total_plant_water_needed        = sum(state.plants.values())
         heuristic                       = 2 * total_plant_water_needed - total_load
 
-        if total_water_available + total_load < total_plant_water_needed:
-            return float('inf')
-        else:
-            heuristic += min_robot_contribution_distance
+        # maybe add a clause saying that if we do not have enough water, e.g: total_load < total_plant_water_needed then we need to add the amount of water to get to a plant
 
         self.heuristics_cache[state] = heuristic
         return heuristic
 
+        self.heuristics_cache[state] = (heuristic, node.path_cost)
+        return heuristic
 
     def h_gbfs(self, node):
         """ This is the heuristic. It gets a node (not a state)
