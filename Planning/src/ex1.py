@@ -1,487 +1,298 @@
-import ex1_check
 import search
-import utils
 
-id = ["No numbers - I'm special!"]
-
-KEY_SIZE    = "Size"
-KEY_WALLS   = "Walls"
-KEY_TAPS    = "Taps"
-KEY_PLANTS  = "Plants"
-KEY_ROBOTS  = "Robots"
-
-class State:
-    __slots__ = (
-        'taps', 'plants', 'robots', 'robot_cords', 'robot_cords_tuple',
-        'active_robot', 'robot_last_actions', 'non_satiated_plants_cords',
-        'non_empty_tap_cords', 'total_plant_water_needed',
-        'total_water_available', 'total_load',
-        '__hash', '__hash_taps', '__hash_plants',
-        '__hash_robots', '__hash_robot_cords_tuple'
-    )
-
-    taps                        : tuple[int]
-    plants                      : tuple[int]
-    robots                      : tuple[tuple[str, int, int]]
-    robot_cords                 : set[tuple[int, int]]
-    robot_cords_tuple           : tuple[tuple[int, int]]
-
-    # active_robot                = None # int | None = None
-    robot_last_actions          : tuple[str] 
-
-    non_satiated_plants_cords   : list[tuple[int, int]]
-    non_empty_tap_cords         : list[tuple[int, int]]
-
-    total_plant_water_needed    : int
-    total_water_available       : int
-    total_load                  : int
-
-    __hash                      : int
-    __hash_taps                 : int
-    __hash_plants               : int
-    __hash_robots               : int
-    __hash_robot_cords_tuple    : int
-
-
-    def __init__(self,
-                _old_state                  = None,
-                _taps                       = None,#: tuple[int]                    | None  = None,
-                _plants                     = None,#: tuple[int]                    | None  = None,
-                _robot_cords                = None,#: set[tuple[int, int]]          | None  = None,
-                _robot_cords_tuple          = None,#: tuple[tuple[int, int]]        | None  = None,
-                _robots                     = None,#: tuple[tuple[str, int, int]]   | None  = None,
-                _total_plant_water_needed   = None,#: int                           | None  = None,
-                _total_water_available      = None,#: int                           | None  = None,
-                _total_load                 = None,#: int                           | None  = None,
-                _non_satiated_plants_cords  = None,#: list[tuple[int, int]]         | None  = None,
-                _non_empty_tap_cords        = None,#: list[tuple[int, int]]         | None  = None,
-                _robot_last_actions         = None,#: tuple[str]                    | None  = None,
-                _active_robot               = None):#: int                           | None  = None):
-
-        if _old_state is not None:
-            self.taps                       = _old_state.taps
-            self.plants                     = _old_state.plants
-            self.robot_cords                = _old_state.robot_cords
-            self.robot_cords_tuple          = _old_state.robot_cords_tuple
-            self.robots                     = _old_state.robots
-
-            self.__hash_taps                = _old_state.__hash_taps
-            self.__hash_plants              = _old_state.__hash_plants
-            self.__hash_robots              = _old_state.__hash_robots
-            self.__hash_robot_cords_tuple   = _old_state.__hash_robot_cords_tuple
-
-            self.total_plant_water_needed   = _old_state.total_plant_water_needed
-            self.total_water_available      = _old_state.total_water_available
-            self.total_load                 = _old_state.total_load
-
-            self.non_satiated_plants_cords  = _old_state.non_satiated_plants_cords
-            self.non_empty_tap_cords        = _old_state.non_empty_tap_cords
-
-        if _non_satiated_plants_cords is not None:
-            self.non_satiated_plants_cords  = _non_satiated_plants_cords
-
-        if _non_empty_tap_cords is not None:
-            self.non_empty_tap_cords        = _non_empty_tap_cords
-
-        if _taps is not None:
-            self.taps                       = _taps
-            self.__hash_taps                = hash(self.taps)
-            self.total_water_available      = _total_water_available if _total_water_available is not None else sum(_taps)
-
-        if _plants is not None:
-            self.plants                     = _plants
-            self.__hash_plants              = hash(self.plants)
-            self.total_plant_water_needed   = _total_plant_water_needed if _total_plant_water_needed is not None else sum(_plants)
-
-        if _robot_cords is not None:
-            self.robot_cords                = _robot_cords
-
-        if _robot_cords_tuple is not None:
-            self.robot_cords_tuple          = _robot_cords_tuple
-            self.__hash_robot_cords_tuple   = hash(self.robot_cords_tuple)
-
-        if _robots is not None:
-            self.robots                     = _robots
-            self.__hash_robots              = hash(self.robots)
-            self.total_load                 = _total_load if _total_load is not None else sum(load for (id, load, capacity) in _robots)
-
-        if _robot_last_actions is not None:
-            self.robot_last_actions         = _robot_last_actions
-
-        self.active_robot                   = _active_robot
-
-        self.__hash = hash((self.__hash_taps, self.__hash_plants, self.__hash_robots,  self.__hash_robot_cords_tuple))
-
-    def __hash__(self):
-        return self.__hash
-
-    def __eq__(self, other):
-        return (
-            self.taps   == other.taps   and
-            self.plants == other.plants and
-            self.robots == other.robots and
-            self.robot_cords_tuple == other.robot_cords_tuple)
+ids = ["217398338"]
 
 class WateringProblem(search.Problem):
-    """This class implements a pressure plate problem"""
-    size:               tuple[int, int]
-    initial:            State
-    heuristics_cache:   dict[State, tuple[float, int]] # float is the heuristic itself, int is the least number of steps taken in order to reach this state
-    map:                dict[tuple[int, int], tuple[str, int]]
-    plant_cords_list:   list[tuple[int, int]]
-    tap_cords_list:     list[tuple[int, int]]
-    bfs_distances:      dict[tuple[ tuple[int, int], tuple[int, int] ], int]
-    plant_tap_distances: dict[tuple[ tuple[int, int], tuple[int, int] ], int]
-    bfs_to_whatever_plant_distances:      dict[tuple[int, int], int]
+    """
+    This class implements the Multi-Tap Plant Watering problem.
+    """
 
     def __init__(self, initial):
-        """ Constructor only needs the initial state.
-        Don't forget to set the goal or implement the goal test"""
-        search.Problem.__init__(self, initial)
-        self.heuristics_cache           = {}
-        self.size                       = initial[KEY_SIZE]
-        self.map                        = {}
-        plant_values                    = []
-        tap_values                      = []
-        self.tap_cords_list             = []
-        self.plant_cords_list           = []
+        """
+        Optimized Constructor.
+        Pre-computes distances using a flattened matrix for O(1) lookup.
+        """
+        self.rows, self.cols = initial["Size"]
+        self.walls = frozenset(initial["Walls"])
+        self.num_cells = self.rows * self.cols
+        
+        # Static capacities: {robot_id: capacity}
+        self.capacities = {r_id: val[3] for r_id, val in initial["Robots"].items()}
+        
+        # Flattening helper: (r, c) -> index
+        self._to_idx = lambda r, c: r * self.cols + c
+        
+        # 1. Parse Initial State
+        # Robots: (id, r, c, load) - Sorted by ID for canonical state
+        sorted_robots = tuple(sorted(
+            [(r_id, r[0], r[1], r[2]) for r_id, r in initial["Robots"].items()]
+        ))
+        
+        # Plants: (r, c, need) - Sorted by coords
+        sorted_plants = tuple(sorted(
+            [(p[0], p[1], amt) for p, amt in initial["Plants"].items() if amt > 0]
+        ))
+        
+        # Taps: (r, c, amount) - Sorted by coords
+        sorted_taps = tuple(sorted(
+            [(t[0], t[1], amt) for t, amt in initial["Taps"].items()]
+        ))
 
-        robot_cords_tuple               = tuple((i,j) for id, (i, j, load, capacity) in initial[KEY_ROBOTS].items())
-        robot_cords                     = set(robot_cords_tuple)
-        robots                          = tuple((str(id), load, capacity) for id, (i, j, load, capacity) in initial[KEY_ROBOTS].items())
+        initial_state = (sorted_robots, sorted_plants, sorted_taps)
+        search.Problem.__init__(self, initial_state)
 
-        for index, (plant_cords, plant_water_needed) in enumerate(initial[KEY_PLANTS].items()):
-            self.map[plant_cords]   = ("plant", index)
-            plant_values.append(plant_water_needed)
-            self.plant_cords_list.append(plant_cords)
-        for index, (tap_cords, water_available) in enumerate(initial[KEY_TAPS].items()):
-            self.map[tap_cords]     = ("tap", index)
-            tap_values.append(water_available)
-            self.tap_cords_list.append(tap_cords)
-        for wall_cords in initial[KEY_WALLS]:
-            self.map[wall_cords]    = ("wall", -1)
+        # 2. Pre-compute All-Pairs Shortest Paths (APSP)
+        self.dist_matrix = self._compute_apsp()
+        
+        # Pre-cache tap indices for heuristic
+        self.tap_indices = [self._to_idx(t[0], t[1]) for t in sorted_taps]
 
-        taps                        = tuple(tap_values)
-        plants                      = tuple(plant_values)
-        non_empty_taps              = [tap_cords    for tap_cords       in self.tap_cords_list      if taps[self.map[tap_cords][1]] > 0]
-        non_satiated_plants_cords   = [plant_cords  for plant_cords     in self.plant_cords_list    if plants[self.map[plant_cords][1]] > 0]
-        robot_last_actions          = ("",) * len(robots)
-        self.initial                = State(_taps               = tuple(tap_values),
-                                            _plants             = tuple(plant_values),
-                                            _robot_cords        = robot_cords,
-                                            _robot_cords_tuple  = robot_cords_tuple,
-                                            _robots             = robots,
-                                            _non_empty_tap_cords     = non_empty_taps,
-                                            _non_satiated_plants_cords = non_satiated_plants_cords,
-                                            _robot_last_actions = robot_last_actions)
-        self.bfs_distances                      = {}
-        self.bfs_to_whatever_plant_distances    = {}
-        for cords in self.tap_cords_list:
-            self.bfs([cords])
-        for cords in self.plant_cords_list:
-            self.bfs([cords])
-        self.bfs_to_any(self.plant_cords_list)
+    def _compute_apsp(self):
+        """
+        Runs BFS from every valid cell to generate a complete distance matrix.
+        Returns a list of lists (size N*M x N*M).
+        """
+        inf = float('inf')
+        matrix = [[inf] * self.num_cells for _ in range(self.num_cells)]
 
-    def bfs_to_any(self, src_cords: list[tuple[int, int]]): # this would get us the distances between certain coordinates and WHATEVER plant
-        """Expects the coordinates of a plant / tap, and in return calculates the minimal distance from the entity to any point lying on the map"""
-        visited_nodes: set[tuple[int, int]] = set(src_cords) 
-        queue: utils.FIFOQueue              = utils.FIFOQueue()
+        # Identify valid cells (not walls)
+        valid_cells = []
+        for r in range(self.rows):
+            for c in range(self.cols):
+                if (r, c) not in self.walls:
+                    valid_cells.append((r, c))
 
-        queue.extend((cords, 0) for cords in src_cords)
+        for start_r, start_c in valid_cells:
+            start_idx = self._to_idx(start_r, start_c)
+            matrix[start_idx][start_idx] = 0
+            
+            queue = [(start_r, start_c, 0)]
+            visited = { (start_r, start_c) }
+            
+            idx = 0
+            while idx < len(queue):
+                r, c, dist = queue[idx]
+                idx += 1
+                curr_idx = self._to_idx(r, c)
+                matrix[start_idx][curr_idx] = dist
+                
+                # Neighbors
+                for dr, dc in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < self.rows and 0 <= nc < self.cols:
+                        if (nr, nc) not in self.walls and (nr, nc) not in visited:
+                            visited.add((nr, nc))
+                            queue.append((nr, nc, dist + 1))
+        return matrix
 
-        (height, width) = self.size
-        is_position_legal = lambda i,j: (
-                (0 <= i < height)
-                and (0 <= j < width)
-                and self.map.get((i,j), (None, -1))[0] != "wall")
+    def successor(self, state):
+        """
+        Generates successor states with Conditional Pruning.
+        """
+        robots, plants, taps = state
+        
+        occupied = {(r[1], r[2]) for r in robots}
+        plant_map = {(p[0], p[1]): i for i, p in enumerate(plants)}
+        tap_map = {(t[0], t[1]): i for i, t in enumerate(taps)}
+        
+        successors = []
+        
+        for i, r in enumerate(robots):
+            r_id, r_r, r_c, r_load = r
+            
+            # Crowding check
+            is_crowded = False
+            for j, other in enumerate(robots):
+                if i != j:
+                    dist = abs(r_r - other[1]) + abs(r_c - other[2])
+                    if dist <= 1:
+                        is_crowded = True
+                        break
+            
+            action_performed = False
 
-        for cords in src_cords:
-            self.bfs_to_whatever_plant_distances[cords] = 0
-        possible_actions = [(0,-1), (0,1), (-1, 0), (1,0)]
+            # 1. Try POUR
+            if (r_r, r_c) in plant_map:
+                p_idx = plant_map[(r_r, r_c)]
+                p_r, p_c, p_need = plants[p_idx]
+                if r_load > 0 and p_need > 0:
+                    action_performed = True
+                    new_robots = list(robots)
+                    new_robots[i] = (r_id, r_r, r_c, r_load - 1)
+                    
+                    new_plants = list(plants)
+                    if p_need - 1 == 0:
+                        new_plants.pop(p_idx) 
+                    else:
+                        new_plants[p_idx] = (p_r, p_c, p_need - 1)
+                    
+                    successors.append(
+                        (f"POUR{{{r_id}}}", (tuple(new_robots), tuple(new_plants), taps))
+                    )
+            
+            # 2. Try LOAD
+            elif (r_r, r_c) in tap_map:
+                t_idx = tap_map[(r_r, r_c)]
+                t_r, t_c, t_amt = taps[t_idx]
+                r_cap = self.capacities[r_id]
+                
+                if t_amt > 0 and r_load < r_cap:
+                    action_performed = True
+                    new_robots = list(robots)
+                    new_robots[i] = (r_id, r_r, r_c, r_load + 1)
+                    
+                    new_taps = list(taps)
+                    if t_amt - 1 == 0:
+                         new_taps[t_idx] = (t_r, t_c, 0)
+                    else:
+                         new_taps[t_idx] = (t_r, t_c, t_amt - 1)
 
-        while (len(queue) > 0):
-            (node_i, node_j), cost = queue.pop()
-            for (d_i, d_j) in possible_actions:
-                if (is_position_legal(node_i + d_i, node_j + d_j)
-                    and not (node_i + d_i, node_j + d_j) in visited_nodes):
+                    successors.append(
+                        (f"LOAD{{{r_id}}}", (tuple(new_robots), plants, tuple(new_taps)))
+                    )
 
-                    queue.append(((node_i + d_i, node_j + d_j), cost + 1))
-                    self.bfs_to_whatever_plant_distances[(node_i + d_i, node_j + d_j)] = cost + 1
-                    visited_nodes.add((node_i + d_i, node_j + d_j))
+            # 3. Move Actions
+            if not (action_performed and not is_crowded):
+                for name, dr, dc in [("UP", -1, 0), ("DOWN", 1, 0), ("LEFT", 0, -1), ("RIGHT", 0, 1)]:
+                    nr, nc = r_r + dr, r_c + dc
+                    
+                    if 0 <= nr < self.rows and 0 <= nc < self.cols:
+                        if (nr, nc) not in self.walls:
+                            if (nr, nc) not in occupied: 
+                                new_robots = list(robots)
+                                new_robots[i] = (r_id, nr, nc, r_load)
+                                successors.append(
+                                    (f"{name}{{{r_id}}}", (tuple(new_robots), plants, taps))
+                                )
 
-    def bfs(self, src_cords: list[tuple[int, int]]): # accepts a list, as we may have several src points (all plants to whatever taps, but single tap to whatever point)
-        """Expects the coordinates of a plant / tap, and in return calculates the minimal distance from the entity to any point lying on the map"""
-        visited_nodes: set[tuple[int, int]] = set(src_cords) 
-        queue: utils.FIFOQueue              = utils.FIFOQueue()
+        return successors
 
-        queue.extend((cords, 0) for cords in src_cords)
+    def goal_test(self, state):
+        return len(state[1]) == 0
 
-        (height, width) = self.size
-        is_position_legal = lambda i,j: (
-                (0 <= i < height)
-                and (0 <= j < width)
-                and self.map.get((i,j), (None, -1))[0] != "wall")
-
-        for cords in src_cords:
-            self.bfs_distances[(cords, cords)] = 0
-        possible_actions = [(0,-1), (0,1), (-1, 0), (1,0)]
-
-        while (len(queue) > 0):
-            (node_i, node_j), cost = queue.pop()
-            for (d_i, d_j) in possible_actions:
-                if (is_position_legal(node_i + d_i, node_j + d_j)
-                    and not (node_i + d_i, node_j + d_j) in visited_nodes):
-
-                    queue.append(((node_i + d_i, node_j + d_j), cost + 1))
-                    for cords in src_cords:
-                        self.bfs_distances[(cords, (node_i + d_i, node_j + d_j))] = cost + 1
-                    visited_nodes.add((node_i + d_i, node_j + d_j))
-
-    # def distance_nearest_plant(self, cords):
-    #     dist = self.bfs_to_whatever_plant_distances.get(cords, None)
-    #     if dist is None: # this either means that the destination was unreachable, or that the function was not used properly
-    #         return float('inf')
-    #     return dist
-
-    # def distance(self, cords_1: tuple[int, int], cords_2: tuple[int, int]):
-    #     dist = self.bfs_distances.get((cords_1, cords_2), None)
-    #     if dist is None: # this either means that the destination was unreachable, or that the function was not used properly
-    #         return float('inf')
-    #     return dist 
-
-    def successor(self, state: State):
-        """ Generates the successor states returns [(action, achieved_states, ...)]"""
-        (height, width) = self.size
-        moves = []
-        # is_move_legal = lambda i,j: ( I INLINED EVERYTHING FOR THE SUBMISSION, 
-        #         (0 <= i < height)
-        #         and (0 <= j < width)
-        #         and self.map.get((i,j), (None, -1))[0] != "wall")
-
-        #is_there_robot          = lambda i,j: (i,j) in state.robot_cords
-
-        # tuple_replace           = lambda t, index, new_value: t[:index] + (new_value,) + t[index+1:]
-        # tuple_remove            = lambda t, index: t[:index] + t[index+1:]
-
-        map                     = self.map
-        plant_cords_list        = self.plant_cords_list
-        tap_cords_list          = self.tap_cords_list
-
-
-        for index, (id, load, capacity) in enumerate(state.robots):
-            (i,j) = state.robot_cords_tuple[index]
-            entity_res          = None
-
-            if load > 0:
-                (entity_type, entity_index) = entity_res = map.get((i,j), (None, -1))
-                if entity_type == "plant":
-                    plant_water_needed = state.plants[entity_index]
-                    if plant_water_needed > 0:
-                        state_new_robots        = state.robots[:index] + ((id, load - 1, capacity),) + state.robots[index+1:]
-                        state_new_plants        = state.plants[:entity_index] + (plant_water_needed - 1,) + state.plants[entity_index+1:]
-                        action_name             = f"POUR{{{id}}}"
-                        state_new_last_actions  = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                        non_satiated_plants_cords       = None
-                        if plant_water_needed == 1:
-                            non_satiated_plants_cords   = [plant_cords  for plant_cords     in plant_cords_list    if state_new_plants[map[plant_cords][1]] > 0]
-
-                        new_active_robot        = None if load - 1 == 0 else index
-                        state_new               = State(state,
-                                                    _plants = state_new_plants,
-                                                    _robots = state_new_robots,
-                                                    _total_load = state.total_load - 1,
-                                                    _total_plant_water_needed = state.total_plant_water_needed - 1,
-                                                    _non_satiated_plants_cords = non_satiated_plants_cords,
-                                                    _robot_last_actions = state_new_last_actions,
-                                                    _active_robot       = new_active_robot)
-                        if self.heuristics_cache.get(state_new, None) is None:
-                            moves.append((action_name, state_new))
-                        if len(state.robots) == 1 or len(state.non_satiated_plants_cords) == 1 or load >= state.total_plant_water_needed:
-                            continue
-
-            if state.active_robot is None or state.active_robot == index:
-                remaining_capacity = capacity - load
-                if remaining_capacity > 0 and state.total_load < state.total_plant_water_needed:
-                    (entity_type, entity_index) = entity_res if entity_res else map.get((i,j), (None, -1))
-                    if entity_type == "tap":
-                        water_available = state.taps[entity_index]
-                        if water_available > 0:
-                            state_new_robots    = state.robots[:index] + ((id, load + 1, capacity),) + state.robots[index+1:]
-                            state_new_taps      = state.taps[:entity_index] + (water_available - 1,) + state.taps[entity_index+1:]
-                            action_name = f"LOAD{{{id}}}"
-                            state_new_last_actions = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                            state_new_non_empty_taps = None
-                            if water_available == 1:
-                                state_new_non_empty_taps = [tap_cords    for tap_cords       in tap_cords_list      if state_new_taps[map[tap_cords][1]] > 0]
-
-                            state_new           = State(state,
-                                                    _robots                 = state_new_robots,
-                                                    _taps                   = state_new_taps,
-                                                    _total_load             = state.total_load + 1,
-                                                    _total_water_available  = state.total_water_available - 1,
-                                                    _non_empty_tap_cords    = state_new_non_empty_taps,
-                                                    _robot_last_actions     = state_new_last_actions,
-                                                    _active_robot           = index)
-
-                            if self.heuristics_cache.get(state_new, None) is None:
-                                moves.append((action_name, state_new))
-                            if len(state.robots) == 1:
-                                continue
-                            if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name) and load < min(state.plants): # and last action was LOAD, then keep LOADing
-                                continue
-
-            if (
-                (0 <= i-1 < height)
-                and (0 <= j < width)
-                and self.map.get((i-1,j), (None, -1))[0] != "wall"):
-                opposite_action = f"DOWN{{{id}}}"
-                if (i+1,j) in state.robot_cords:
-                    if state.robot_last_actions[index] == opposite_action:
-                        state.robot_last_actions = state.robot_last_actions[:index] + ("",) + state.robot_last_actions[index+1:]
-                if not (i-1,j) in state.robot_cords and state.robot_last_actions[index] != opposite_action:
-                    state_new_robot_cords_tuple = state.robot_cords_tuple[:index] + ((i-1,j),) + state.robot_cords_tuple[index+1:]
-                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                    action_name             = f"UP{{{id}}}"
-                    state_new_last_actions = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions, _active_robot = state.active_robot)
-
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
-
-            if (
-                (0 <= i+1 < height)
-                and (0 <= j < width)
-                and self.map.get((i+1,j), (None, -1))[0] != "wall"):
-                opposite_action = f"UP{{{id}}}"
-                if (i-1,j) in state.robot_cords:
-                    if state.robot_last_actions[index] == opposite_action:
-                        state.robot_last_actions = state.robot_last_actions[:index] + ("",) + state.robot_last_actions[index+1:]
-                if not (i+1,j) in state.robot_cords and state.robot_last_actions[index] != opposite_action:
-                    state_new_robot_cords_tuple = state.robot_cords_tuple[:index] + ((i+1,j),) + state.robot_cords_tuple[index+1:]
-                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                    action_name             = f"DOWN{{{id}}}"
-                    state_new_last_actions = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions, _active_robot = state.active_robot)
-
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
-
-            if (
-                (0 <= i < height)
-                and (0 <= j-1 < width)
-                and self.map.get((i,j-1), (None, -1))[0] != "wall"):
-                opposite_action = f"RIGHT{{{id}}}"
-                if (i,j+1) in state.robot_cords:
-                    if state.robot_last_actions[index] == opposite_action:
-                        state.robot_last_actions = state.robot_last_actions[:index] + ("",) + state.robot_last_actions[index+1:]
-                if not (i,j-1) in state.robot_cords and state.robot_last_actions[index] != opposite_action:
-                    state_new_robot_cords_tuple = state.robot_cords_tuple[:index] + ((i,j-1),) + state.robot_cords_tuple[index+1:]
-                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                    action_name             = f"LEFT{{{id}}}"
-                    state_new_last_actions = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions, _active_robot = state.active_robot)
-
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
-
-            if (
-                (0 <= i < height)
-                and (0 <= j+1 < width)
-                and self.map.get((i,j+1), (None, -1))[0] != "wall"):
-                opposite_action = f"LEFT{{{id}}}"
-                if (i,j-1) in state.robot_cords:
-                    if state.robot_last_actions[index] == opposite_action:
-                        state.robot_last_actions = state.robot_last_actions[:index] + ("",) + state.robot_last_actions[index+1:]
-                if not (i,j+1) in state.robot_cords and state.robot_last_actions[index] != opposite_action:
-                    state_new_robot_cords_tuple = state.robot_cords_tuple[:index] + ((i,j+1),) + state.robot_cords_tuple[index+1:]
-                    state_new_robot_cords   = set(state_new_robot_cords_tuple)
-                    action_name             = f"RIGHT{{{id}}}"
-                    state_new_last_actions = state.robot_last_actions[:index] + (action_name,) + state.robot_last_actions[index+1:]
-                    state_new               = State(state, _robot_cords = state_new_robot_cords, _robot_cords_tuple = state_new_robot_cords_tuple, _robot_last_actions = state_new_last_actions, _active_robot = state.active_robot)
-
-                    if self.heuristics_cache.get(state_new, None) is None:
-                        moves.append((action_name, state_new))
-
-        return moves
-
-    def goal_test(self, state: State):
-        """ given a state, checks if this is the goal state, compares to the created goal state returns True/False"""
-        return all(not plant_water_needed for plant_water_needed in state.plants)
     def h_astar(self, node):
-        """ This is the heuristic. It gets a node (not a state)
-        and returns a goal distance estimate"""
-
-        INF                             = float('inf')
-        state                           = node.state
-        total_load                      = state.total_load
-        total_plant_water_needed        = state.total_plant_water_needed
-        total_water_available           = state.total_water_available
-
-        # Cheaper than querying the cache...
-        if not state.non_satiated_plants_cords:
+        """
+        Admissible Heuristic: Actions + MST(Plants) + Minimum Entry Cost
+        """
+        state = node.state
+        robots, plants, taps = state
+        
+        if not plants:
             return 0
-        if total_water_available + total_load < total_plant_water_needed:
-            return INF
+        
+        # --- 1. Resource Action Costs (Load/Pour) ---
+        total_need = 0
+        for p in plants:
+            total_need += p[2]
+            
+        total_carried = 0
+        for r in robots:
+            total_carried += r[3]
+            
+        # Cost to POUR
+        h_pour = total_need
+        # Cost to LOAD (Deficit)
+        deficit = max(0, total_need - total_carried)
+        h_load = deficit
+        
+        # --- 2. Plant Traversal Cost (MST) ---
+        # This calculates the minimum wire to connect all plants together.
+        plant_indices = [self._to_idx(p[0], p[1]) for p in plants]
+        num_plants = len(plants)
+        mst_weight = 0
+        
+        # Prim's Algorithm for MST of Plants only
+        if num_plants > 1:
+            # Distance from tree to remaining nodes
+            # Start with first plant as the tree
+            min_dists = [self.dist_matrix[plant_indices[0]][plant_indices[i]] 
+                         for i in range(num_plants)]
+            visited = [False] * num_plants
+            visited[0] = True
+            
+            # We need to add N-1 edges
+            for _ in range(num_plants - 1):
+                # Find closest unvisited node to the current tree
+                u = -1
+                min_val = float('inf')
+                for i in range(num_plants):
+                    if not visited[i] and min_dists[i] < min_val:
+                        min_val = min_dists[i]
+                        u = i
+                
+                if u == -1: break # Should not happen in connected component
+                
+                visited[u] = True
+                mst_weight += min_val
+                
+                # Update distances from the new node u
+                u_idx = plant_indices[u]
+                for v in range(num_plants):
+                    if not visited[v]:
+                        v_idx = plant_indices[v]
+                        d = self.dist_matrix[u_idx][v_idx]
+                        if d < min_dists[v]:
+                            min_dists[v] = d
 
-        cached_result = self.heuristics_cache.get(state, None)
-        if cached_result is not None:
-            (value, path_cost)          = cached_result
-            if path_cost < node.path_cost:
-                return value
-                #return INF
-            else:
-                self.heuristics_cache[state] = (value, node.path_cost)
-                return value
- 
-        min_robot_contribution_distance         = INF
-        get_dist                                = self.bfs_distances.get
-        get_plant_dist                          = self.bfs_to_whatever_plant_distances.get
+        # --- 3. Entry Cost ---
+        # We have a network of plants (MST). We need to enter it.
+        # We can enter from a Robot -> Plant (if robot has water)
+        # Or Robot -> Tap -> Plant (if robot is empty)
+        # We take the global minimum cost to start watering.
+        
+        # Pre-calculate closest plant distance for every tap (needed for empty robots)
+        # tap_to_closest_plant[t_idx] = distance
+        tap_to_any_plant = []
+        
+        # Only check active taps (amt > 0)
+        active_taps = [t for t in taps if t[2] > 0]
+        if not active_taps and deficit > 0:
+             return float('inf') # Dead end
 
-        for index, (id, load, capacity) in enumerate(state.robots):
-            robot_cords = state.robot_cords_tuple[index]
-            current_robot_contribution_distance = INF
-            distance_tap_then_plant = INF
+        # If we have a deficit, we might need the taps.
+        if deficit > 0 or not active_taps:
+             # Optimization: If deficit > 0, we perform this check.
+             # If deficit == 0, we can theoretically ignore empty robots, 
+             # but to be safe/simple we calculate tap distances if taps exist.
+             if active_taps:
+                 for t in active_taps:
+                     t_idx = self._to_idx(t[0], t[1])
+                     min_d = float('inf')
+                     for p_idx in plant_indices:
+                         d = self.dist_matrix[t_idx][p_idx]
+                         if d < min_d:
+                             min_d = d
+                     tap_to_any_plant.append((t_idx, min_d))
 
-            if state.non_empty_tap_cords:
-                distance_tap_then_plant = min(
-                        (get_dist((tap_cords, robot_cords), INF)) + get_plant_dist(tap_cords, INF)
-                        for tap_cords in state.non_empty_tap_cords)
+        min_entry_cost = float('inf')
 
-            if load == 0:
-                    current_robot_contribution_distance = distance_tap_then_plant
-            else:
-                if total_load < total_plant_water_needed:
-                    current_robot_contribution_distance = INF
-                    if state.non_empty_tap_cords and state.non_satiated_plants_cords:
-                        current_robot_contribution_distance  = min(
-                                (get_dist((plant_cords, robot_cords), INF)) + (get_dist((plant_cords, tap_cords), INF)) # for some reason calculating the distance for the second plant makes it slower
-                                for tap_cords       in state.non_empty_tap_cords
-                                for plant_cords     in state.non_satiated_plants_cords)
-                    current_robot_contribution_distance = min(distance_tap_then_plant, current_robot_contribution_distance)
-                else:
-                    current_robot_contribution_distance  = get_plant_dist(robot_cords, INF)
-            min_robot_contribution_distance          = min(min_robot_contribution_distance, current_robot_contribution_distance)
+        for r in robots:
+            r_idx = self._to_idx(r[1], r[2])
+            
+            # Option A: Robot goes directly to a plant (valid if load > 0)
+            if r[3] > 0:
+                for p_idx in plant_indices:
+                    d = self.dist_matrix[r_idx][p_idx]
+                    if d < min_entry_cost:
+                        min_entry_cost = d
+            
+            # Option B: Robot goes to Tap then Plant (valid always, necessary if empty)
+            # Cost = Dist(R, Tap) + Dist(Tap, Closest_Plant_To_That_Tap)
+            if active_taps:
+                for t_idx, t_p_dist in tap_to_any_plant:
+                    r_t_dist = self.dist_matrix[r_idx][t_idx]
+                    total = r_t_dist + t_p_dist
+                    if total < min_entry_cost:
+                        min_entry_cost = total
 
-        heuristic                       = 2 * total_plant_water_needed - total_load
+        # If no path found (unreachable), min_entry_cost remains inf
+        if min_entry_cost == float('inf'):
+            return float('inf')
 
-        # maybe add a clause saying that if we do not have enough water, e.g: total_load < total_plant_water_needed then we need to add the amount of water to get to a plant
-
-        heuristic += min_robot_contribution_distance
-
-        self.heuristics_cache[state] = (heuristic, node.path_cost)
-        return heuristic
+        return h_pour + h_load + mst_weight + min_entry_cost
 
     def h_gbfs(self, node):
-        """ This is the heuristic. It gets a node (not a state)
-        and returns a goal distance estimate"""
-        return 2 * node.state.total_plant_water_needed - sum(load for id, load, capacity in node.state.robots)
+        return self.h_astar(node)
 
 def create_watering_problem(game):
-    print("<<create_watering_problem")
-    """ Create a pressure plate problem, based on the description.
-    game - tuple of tuples as described in pdf file"""
     return WateringProblem(game)
-
-
-if __name__ == '__main__':
-    ex1_check.main()
