@@ -275,10 +275,26 @@ problem_load_hard = {
     "Robots": {10: (2, 0, 0, 2), 11: (7, 0, 0, 30)},
 }
 
-correct_answers = [8, 20, 28, 13, 8, 21, 76, 48, 97, 93, 34, 52, 85]
-
 def main():
-    problems = [(problem_harder4,            "problem_harder4",      97)]
+    problems = [(problem1,                  "problem1",                 8),
+                (problem2,                  "problem2",                 20),
+                (problem3,                  "problem3",                 28),
+                (problem4,                  "problem4",                 13),
+                (problem5,                  "problem5",                 8),
+                (problem6,                  "problem6",                 21),
+                (problem_8,                 "problem_8",                76),
+                (problem_hard1,            "problem_hard1",             31),
+                (problem_hard6,            "problem_hard6",             33),
+                #(problem_hard7,            "problem_hard7",      ),
+                (problem_12x12_snake_hard, "problem_12x12_snake_hard",  343),
+                #(problem_check,            "problem_check",      ),
+                (problem_harder3,           "problem_harder3",          48),
+                (problem_harder4,           "problem_harder4",          97),
+                (problem_harder66,          "problem_harder66",         93),
+                (problem_harder666,         "problem_harder666",        34),
+                (problem_harder44,          "problem_harder44",         52),
+                (problem_load_hard,         "problem_load_hard",        85)
+                ]
     i = 1
     is_failed = False
     start = time.time()

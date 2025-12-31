@@ -323,12 +323,12 @@ class WateringProblem(search.Problem):
                                                     _robot_last_actions     = state_new_last_actions,
                                                     _active_robot           = index)
 
-                            if self.heuristics_cache.get(state_new, None) is None:
-                                moves.append((action_name, state_new))
+                            #if self.heuristics_cache.get(state_new, None) is None:
+                            moves.append((action_name, state_new))
                             if len(state.robots) == 1:
                                 continue
-                            if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name) and load < min(state.plants): # and last action was LOAD, then keep LOADing
-                                continue
+                            #if (len(state.non_empty_tap_cords) == 1 and state.robot_last_actions[index] == action_name) and load < min(state.plants): # and last action was LOAD, then keep LOADing
+                            #    continue
 
             if (
                 (0 <= i-1 < height)
