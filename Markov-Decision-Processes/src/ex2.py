@@ -7,6 +7,7 @@ id = ["000000000"]
 Cords = tuple[int, int]
 Robot = tuple[int, Cords, int]
 Plant = tuple[Cords, int]
+Tap   = tuple[Cords, int]
 
 class Controller:
     """This class is a controller for the ext_plant game."""
@@ -120,12 +121,32 @@ class Controller:
 # The second situation is a bit more complicated, so here is how I model it:
 # for every robot and plant:
 # go over every tap, and calculate the value of loading water units in the following amount:
-# M := min(tap_available_water, plant_water_needed / success_rate, robot_capacity)
+# M := min(tap_available_water, (plant_water_needed / success_rate) - current_robot_load, robot_remaining_capacity)
 # * plant_water_needed / success_rate is the EXPECTED amount of water needed to satiate the plant with this particular robot
-# now, get the amount of steps needed to get to the tap, and from the tap to the plant using calc_mean_step that we worked on.
+# now, get the amount of steps needed to get to the tap, and from the tap to the plant using calc_mean_step.
 # get the mean of the total number of turns as being: (M / success_rate) loading operations (when failure occurs, we don't load anything but just waste a turn) + the mean amount of steps required to get to the tap and from there to the plant + M (the amount of times we POUR on the plant)
 # now, get the mean reward for this option as: M * success_rate * plant_reward_per_water_unit
 # at last, divide the mean reward for this option by the mean total amount of turns  to get the mean per step reward
 # from this we find the best greedy option for going to a tap then to a plant, we will later compare it with going directly to the plant.
-    def eval_robot_plant(self, robot: Robot, plant: Plant):
-        success_rate
+    def eval_robot_plant(self, robot: Robot, plant: Plant, taps: list[Tap], other_robots: list[Robot]):
+        other_robot_cords = set((robot[1] for robot in other_robots))
+        self.update_bfs_distances(other_robot_cords)
+
+        capacities = self.original_game.get_capacities()
+        (plant_cords, water_needed) = plant
+        (robot_id, robot_cords, load) = robot
+        capacity = capacities[robot_id]
+        remaining_capacity = capacity - load
+        success_rate = self.original_game._robot_chosen_action_prob[robot_id]
+        mean_water_needed_to_satiate_plant = np.ceil((water_needed / success_rate))
+        mean_water_missing_to_satiate = max(0, mean_water_needed_to_satiate_plant - load)
+        plant_rewards = self.original_game._plants_reward[plant_cords]
+        plant_mean_reward_per_water_unit = sum(plant_rewards) / len(plant_rewards)
+
+        for tap_cords, tap_available_water in taps:
+            M = min(tap_available_water, mean_water_missing_to_satiate, remaining_capacity)
+            mean_steps_to_tap_then_plant = self.calc_mean_steps(robot_cords, tap_cords, success_rate) + self.calc_mean_steps(tap_cords, plant_cords, success_rate)
+            mean_poured_units = min(M + load, mean_water_needed_to_satiate_plant)
+            mean_steps_for_path = (M / success_rate) + mean_steps_to_tap_then_plant + mean_poured_units
+            mean_reward_for_path = mean_poured_units * success_rate * plant_mean_reward_per_water_unit
+            mean_reward_per_step_for_path = mean_reward_for_path / mean_steps_for_path
