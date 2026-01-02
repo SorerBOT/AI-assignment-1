@@ -219,18 +219,21 @@ class Controller:
     def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
         max_mean_reward_per_step_for_path = -float('inf')
         max_tap_cords = None
+        max_robot = None
+        max_plant = None
+
         for robot in robots:
             (robot_id, robot_cords, load) = robot
+            other_robots = list(_robot for _robot in robots if _robot[0] != robot_id)
             for plant in plants:
                 (plant_cords, water_needed) = plant
-                other_robots = list(_robot for _robot in robots if _robot[0] != robot_id)
-                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(self, robot, plant, taps, other_robots)
+                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(robot, plant, taps, other_robots)
                 if max_mean_reward_per_step_for_path < mean_reward_per_step_for_path:
                     max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
                     max_tap_cords = tap_cords
-        if max_mean_reward_per_step_for_path <= 0:
+                    max_robot = robot
+                    max_plant = plant
+        if max_mean_reward_per_step_for_path <= 0 or max_plant is None or max_robot is None:
             # get random action
-            raise Exception("We fucked up. No action is good :((((") # I'll handle this case later by taking an action randomly
-        return (max_mean_reward_per_step_for_path, max_tap_cords)
-
-
+            return None
+        return (max_robot, max_plant, max_tap_cords)
