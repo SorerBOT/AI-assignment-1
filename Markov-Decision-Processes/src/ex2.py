@@ -211,6 +211,11 @@ class Controller:
 
         return (max_mean_reward_per_step_for_path, max_tap_cords)
 
+    # Iterate over every robot & plant pair. Find the pair with the highest per step reward,
+    # then perform the first step in that plan. Then repeat the first step (finding the optimal path).
+    # this plan will likely remain the one with the highest reward per step rate
+    # (the reward per step probably increased if we took the right step), so we will probably follow it even if we allow
+    # shifting to another plan.
     def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
         max_mean_reward_per_step_for_path = -float('inf')
         max_tap_cords = None
