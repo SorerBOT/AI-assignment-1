@@ -1,3 +1,4 @@
+from re import L
 import ext_plant
 import numpy as np
 from collections import deque
@@ -52,7 +53,7 @@ class Controller:
     def calc_mean_steps(self, src: Cords, dst: Cords, success_rate: float):
         (x_1, x_2) = src
         (y_1, y_2) = dst;
-        
+       
         distance = self.bfs_distances.get((dst, src), float('inf'))
         # corrisor situation
         # In case of failure, we have 5 options, moving UP, DOWN, RIGHT, LEFT and staying in place.
@@ -209,3 +210,22 @@ class Controller:
                 max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
 
         return (max_mean_reward_per_step_for_path, max_tap_cords)
+
+    def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
+        max_mean_reward_per_step_for_path = -float('inf')
+        max_tap_cords = None
+        for robot in robots:
+            (robot_id, robot_cords, load) = robot
+            for plant in plants:
+                (plant_cords, water_needed) = plant
+                other_robots = list(_robot for _robot in robots if _robot[0] != robot_id)
+                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(self, robot, plant, taps, other_robots)
+                if max_mean_reward_per_step_for_path < mean_reward_per_step_for_path:
+                    max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
+                    max_tap_cords = tap_cords
+        if max_mean_reward_per_step_for_path <= 0:
+            # get random action
+            raise Exception("We fucked up. No action is good :((((") # I'll handle this case later by taking an action randomly
+        return (max_mean_reward_per_step_for_path, max_tap_cords)
+
+
