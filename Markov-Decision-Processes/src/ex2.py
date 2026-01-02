@@ -18,10 +18,6 @@ class Controller:
         self.original_game = game
         self.bfs_path = {}
         self.bfs_distances = {}
-        for cords in game.taps:
-            self.bfs(cords)
-        for cords in game.plants:
-            self.bfs(cords)
   
     def choose_next_action(self, state):
         """ Choose the next action given a state."""
@@ -50,7 +46,37 @@ class Controller:
                     possible_moves.append(f"LOAD({robot_id})")
         return np.random.choice(np.array(possible_moves))
 
-    def bfs(self, cords: tuple[int, int]): # accepts a list, as we may have several src points (all plants to whatever taps, but single tap to whatever point)
+    def calc_mean_steps(self, src: Cords, dst: Cords, success_rate: float):
+        (x_1, x_2) = src
+        (y_1, y_2) = dst;
+        
+        distance = self.bfs_distances.get((dst, src), float('inf'))
+        # corrisor situation
+        # In case of failure, we have 5 options, moving UP, DOWN, RIGHT, LEFT and staying in place.
+        # In the corridor situation 3/4 directions drift us away, 1 direction advances us
+        # and staying in place is neutral. So the expectation of steps on failure is:
+        # 3 * 0.2 * (-1) + 0.2 + 0.2 * 0 = -0.4
+        # Now the total expectation of a step (including both failure and success), is:
+        # success_rate * 1 - 0.4 *(1 - success_rate) = 1.4 * success_rate - 0.4
+        # and from here we would need distance / (1.4 * success_rate - 0.4) steps to reach dst.
+        # this is a direct deduction from Wald's theorem: https://en.wikipedia.org/wiki/Wald%27s_equation
+        if (x_1 == y_1 or x_2 == y_2):
+            return distance / (1.4 * success_rate - 0.4)
+
+        # non-corridor situation, we need to circle around a block
+        # We once more have 5 options, moving in one of the four directions, and staying in place.
+        # the difference is that in this case, two of the four directions advance us, and 2 harm us, while staying in place is neutral.
+        # the above yields the following EXPECTATION of advancement per failure:
+        #   E = 2 * 0.2 * (-1) + 2 * 0.2 * 1 + 0.2 * 0 = 0
+        # this means that the EXPECTED advancement, on failure is 0.
+        # from here, the mean advancement in general is:
+        # E = success_rate * 1 + (1 - success_rate) * 0 = success_rate
+        # and for this reason, using Wald's Theorem or common sense, we find that:
+        # E[steps_required] = distance / success_rate
+        return distance / success_rate
+        
+
+    def bfs(self, cords: Cords, walls: set[Cords]): # accepts a list, as we may have several src points (all plants to whatever taps, but single tap to whatever point)
         """Expects the coordinates of a plant / tap, and in return calculates the minimal distance from the entity to any point lying on the map"""
         visited_nodes: set[tuple[int, int]] = set({ cords }) 
         queue = deque()
@@ -61,7 +87,7 @@ class Controller:
         is_position_legal = lambda i,j: (
                 (0 <= i < height)
                 and (0 <= j < width)
-                and (i,j) not in self.original_game.walls)
+                and (i,j) not in walls)
 
         self.bfs_distances[(cords, cords)]  = 0
         self.bfs_paths[(cords, cords)]      = {cords}
@@ -78,3 +104,11 @@ class Controller:
                     self.bfs_distances[(cords, new_point)] = self.bfs_distances[(cords, old_point)] + 1
                     self.bfs_paths[(cords, new_point)] = self.bfs_paths[(cords, old_point)].union({ new_point })
                     visited_nodes.add((node_i + d_i, node_j + d_j))
+
+    def update_bfs_distances(self, extra_walls: set[Cords]):
+        total_walls = self.original_game.walls.union(extra_walls)
+        for cords in self.original_game.taps:
+            self.bfs(cords, self.original_game.walls.union(total_walls))
+        for cords in self.original_game.plants:
+            self.bfs(cords, total_walls)
+
