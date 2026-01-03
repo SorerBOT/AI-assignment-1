@@ -72,7 +72,39 @@ problem_pdf3 = {
     "seed": 45,
     "horizon": 30,
 }
- 
+
+problem_new1_version2 = {
+    "Size": (5, 6),
+    "Walls": {
+        # block some middle cells to create a kind of corridor
+        (1, 2),
+        (1, 3),
+        (3, 2),
+        (3, 3),
+    },
+    "Taps": {
+        (2, 2): 12,
+    },
+    "Plants": {
+        (0, 1): 3,
+        (4, 5): 6,
+    },
+    "Robots": {
+        10: (2, 1, 0, 6),
+        11: (2, 4, 0, 3),
+    },
+    "robot_chosen_action_prob": {
+        10: 0.6,
+        11: 0.95,
+    },
+    "goal_reward": 30,
+    "plants_reward": {
+        (4, 5): [1, 2, 3, 4],
+        (0, 1): [10, 11, 12, 13],
+    },
+    "seed": 45,
+    "horizon": 70,
+} 
 
 
 def main():
@@ -80,7 +112,7 @@ def main():
     n_runs = 30
     # Fix horizon
     total_reward = 0.0
-    problems = [problem_pdf]
+    problems = [problem_new1_version2]
     for problem in problems:
         total_reward = 0.0
         for seed in range(n_runs):

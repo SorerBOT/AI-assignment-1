@@ -58,16 +58,46 @@ class Controller:
         if total_robot_load == 0 and len(non_empty_taps) == 0:
             self.is_in_run = False
             return "RESET"
-        best_path_data = self.find_greedy_best_robot_plant(robots, non_empty_plants, non_empty_taps)
-        if best_path_data is None:
+
+        # checking if any movement action "opens up the board" and adds better greedy solutions
+        best_lookahead_path_data = self.find_lookahead_best_move(robots, non_empty_plants, non_empty_taps)
+
+        # getting best greedy path (we'll only execute the first action in the path every time,
+        # but the path should remain consistent across different choose_next_action invocations)
+        best_greedy_path_data = self.find_greedy_best_robot_plant(robots, non_empty_plants, non_empty_taps)
+
+        if best_greedy_path_data is None and best_lookahead_path_data is None:
             self.is_in_run = False
             return "RESET"
-        (robot, plant, tap_cords, mean_reward_per_step) = best_path_data
 
-        if (mean_reward_per_step < self.best_run_mean_reward_per_step
+        max_mean_reward_per_step = -float('inf')
+        lookahead_action = None
+
+        if best_lookahead_path_data is not None:
+            (mean_reward_per_step, action) = best_lookahead_path_data
+            max_mean_reward_per_step = mean_reward_per_step
+            lookahead_action = action
+            if best_greedy_path_data is None: # this is an awful way to write this logic
+                if (max_mean_reward_per_step < self.best_run_mean_reward_per_step
+                    and self.best_run_length <= self.original_game.get_max_steps() - self.original_game.get_current_steps()):
+                    self.is_in_run = False
+                    return "RESET"
+                else:
+                    return lookahead_action
+
+        (robot, plant, tap_cords, greedy_mean_reward_per_step) = best_greedy_path_data
+        should_use_lookahead = True
+        if max_mean_reward_per_step < greedy_mean_reward_per_step:
+            max_mean_reward_per_step = greedy_mean_reward_per_step
+            should_use_lookahead = False
+
+        if (max_mean_reward_per_step < self.best_run_mean_reward_per_step
             and self.best_run_length <= self.original_game.get_max_steps() - self.original_game.get_current_steps()):
             self.is_in_run = False
             return "RESET"
+
+        if should_use_lookahead and lookahead_action is not None:
+            return lookahead_action
 
         (robot_id, robot_cords, load) = robot
         (plant_cords, water_needed) = plant
@@ -115,32 +145,19 @@ class Controller:
             self.best_run_length = self.current_run_length
             self.best_run_mean_reward_per_step = current_run_mean_reward_per_step
 
-    #def choose_next_action(self, state):
-    #    """ Choose the next action given a state."""
-    #    possible_moves = []
+    def get_legal_movement_actions(self, robots):
+        possible_moves = []
 
-    #    (robots, plants, taps, total_water_need) = state
-    #    capacities = self.original_game.get_capacities()
-
-    #    directions = [((0, 1), "RIGHT"), ((0, -1), "LEFT"), ((-1, 0), "UP"), ((1, 0), "DOWN")]
-    #    for robot_id, (r, c), load in robots:
-    #        remaining_capacity = capacities[robot_id] - load
-    #        for (dr, dc), action_name in directions:
-    #            destination = (r + dr, c + dc)
-    #            if (all(cords != destination for (_, cords, __) in robots) and
-    #                destination not in self.original_game.walls and
-    #                0 <= r + dr < self.original_game.rows and
-    #                0 <= c + dc < self.original_game.cols):
-    #                possible_moves.append(f"{action_name}({robot_id})")
-    #        if load > 0:
-    #            plant_in_current_location = next(((pos, need) for (pos, need) in plants if (r, c) == pos and need > 0), None)
-    #            if plant_in_current_location is not None:
-    #                possible_moves.append(f"POUR({robot_id})")
-    #        if remaining_capacity > 0:
-    #            tap_in_current_location = next(((pos, available_water) for (pos, available_water) in taps if (r, c) == pos and available_water > 0), None)
-    #            if tap_in_current_location is not None:
-    #                possible_moves.append(f"LOAD({robot_id})")
-    #    return np.random.choice(np.array(possible_moves))
+        directions = [((0, 1), "RIGHT"), ((0, -1), "LEFT"), ((-1, 0), "UP"), ((1, 0), "DOWN")]
+        for robot_id, (r, c), load in robots:
+            for (dr, dc), action_name in directions:
+                destination = (r + dr, c + dc)
+                if (all(cords != destination for (_, cords, __) in robots) and
+                    destination not in self.original_game.walls and
+                    0 <= r + dr < self.original_game.rows and
+                    0 <= c + dc < self.original_game.cols):
+                    possible_moves.append((robot_id, (r + dr, c + dc), action_name))
+        return possible_moves
 
     def calc_mean_steps(self, src: Cords, dst: Cords, success_rate: float):
         (x_1, x_2) = src
@@ -229,11 +246,11 @@ class Controller:
 # Returning to the second case, I simply note the mean amount of steps required to reach the plant, and the amount of load the robot can pour on the plant (depends on the amount of water it carries, and on the water needed by the plant)
 # then, I calculate the reward per step just as I had previously done.
 
-    def eval_robot_plant(self, robot: Robot, plant: Plant, taps: list[Tap], goal_reward_per_water_unit: float):
+    def eval_robot_plant(self, robot: Robot, plant: Plant, taps: list[Tap], goal_reward_per_water_unit: float, preceding_steps: int):
         # I set up the BFS before calling eval_robot_plant
 
         # Getting remaining horizon
-        remaining_horizon = self.original_game.get_max_steps() - self.original_game.get_current_steps()
+        remaining_horizon = self.original_game.get_max_steps() - self.original_game.get_current_steps() - preceding_steps
 
         # Getting Robot info
         capacities = self.original_game.get_capacities()
@@ -289,7 +306,7 @@ class Controller:
                 mean_poured_units = min(M + load, mean_water_needed_to_satiate_plant) # including SPILL
                 mean_steps_for_path = (M / success_rate) + mean_steps_to_tap_then_plant + mean_poured_units
                 mean_reward_for_path = mean_poured_units * success_rate * plant_mean_reward_per_water_unit
-                mean_reward_per_step_for_path = mean_reward_for_path / mean_steps_for_path
+                mean_reward_per_step_for_path = mean_reward_for_path / (mean_steps_for_path + preceding_steps)
                 if mean_reward_per_step_for_path > max_mean_reward_per_step_for_path:
                     max_tap_cords = tap_cords
                     max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
@@ -302,7 +319,7 @@ class Controller:
             mean_poured_units = min(load, mean_water_needed_to_satiate_plant, remaining_horizon - mean_steps_to_plant) # including SPILL, and accounting for the remaining horizon.
             mean_steps_for_path = mean_steps_to_plant + mean_poured_units
             mean_reward_for_path = mean_poured_units * success_rate * plant_mean_reward_per_water_unit
-            mean_reward_per_step_for_path = mean_reward_for_path / mean_steps_for_path
+            mean_reward_per_step_for_path = mean_reward_for_path / (mean_steps_for_path + preceding_steps)
             if mean_reward_per_step_for_path > max_mean_reward_per_step_for_path:
                 max_tap_cords = None # meaning we don't need to go through a tap
                 max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
@@ -317,7 +334,7 @@ class Controller:
     # additionally, we incorporate the {goal_reward} into our evaluation, by adding {goal_reward} / {total_water_units_missing}
     # to every plant's reward, if we would not have done this, the algorithm would often favour to satiate the "best" plant,
     # then simply reset the problem and satiate it once more repeatedly, until the horizon is depleted.
-    def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
+    def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap], preceding_steps: int =0):
         best_success_rate = max(self.original_game._robot_chosen_action_prob[robot[0]] for robot in robots)
         total_water_units_missing = sum(plant[1] for plant in plants)
         min_mean_remaining_pours = total_water_units_missing / best_success_rate
@@ -325,6 +342,9 @@ class Controller:
         total_water_units_available_in_robots = sum(robot[2] for robot in robots)
         if total_water_units_available_in_taps + total_water_units_available_in_robots < 0.75 * min_mean_remaining_pours:
             goal_reward_per_water_unit = 0
+        # this also lowers the final reward, but I do think it to be correct, I also think I should divide it by  best_success_rate
+        #elif self.original_game.get_max_steps() - self.original_game.get_current_steps() <= (2 * total_water_units_missing - total_water_units_available_in_robots):
+        #    goal_reward_per_water_unit = 0
         else:
             goal_reward_per_water_unit = self.original_game._goal_reward / total_water_units_missing
 
@@ -335,12 +355,15 @@ class Controller:
 
         for robot in robots:
             (robot_id, robot_cords, load) = robot
+            success_rate = self.original_game._robot_chosen_action_prob[robot_id]
+            #if best_success_rate - success_rate > 0.24:
+            #    continue
             other_robots = list(_robot for _robot in robots if _robot[0] != robot_id)
             other_robot_cords = set((robot[1] for robot in other_robots))
             self.update_bfs_distances(other_robot_cords)
 
             for plant in plants:
-                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(robot, plant, taps, goal_reward_per_water_unit)
+                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(robot, plant, taps, goal_reward_per_water_unit, preceding_steps)
                 if max_mean_reward_per_step_for_path < mean_reward_per_step_for_path:
                     max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
                     max_tap_cords = tap_cords
@@ -362,3 +385,25 @@ class Controller:
             potential_next_step = (r + dr, c + dc)
             if potential_next_step in bfs_path:
                 return action_name
+
+    def find_lookahead_best_move(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
+        max_mean_reward_per_step = -float('inf')
+        max_action = None
+        
+        for robot_id, robot_new_cords, action_name in self.get_legal_movement_actions(robots):
+            new_robots = []
+            for robot in robots:
+                if robot[0] == robot_id:
+                    new_robots.append((robot_id, robot_new_cords, robot[2]))
+                else:
+                    new_robots.append(robot)
+            best_path_data = self.find_greedy_best_robot_plant(new_robots, plants, taps, preceding_steps=1)
+            if best_path_data is not None:
+                (robot, plant, tap_cords, mean_reward_per_step) = best_path_data
+                if max_mean_reward_per_step < mean_reward_per_step:
+                    max_mean_reward_per_step = mean_reward_per_step
+                    max_action = f"{action_name}({robot_id})"
+
+        if max_mean_reward_per_step == -float('inf') or max_action == None:
+            return None
+        return (max_mean_reward_per_step, max_action)
