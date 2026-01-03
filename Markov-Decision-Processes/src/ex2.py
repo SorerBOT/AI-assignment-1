@@ -22,6 +22,7 @@ class Controller:
         self.original_game = game
         self.bfs_paths = {}
         self.bfs_distances = {}
+        self.plant_rewards = dict([(plant_cords, sum(self.original_game._plants_reward[plant_cords]) / len(self.original_game._plants_reward[plant_cords])) for plant_cords in game.plants])
  
     # In general, we want to consider both a greedy solution, oriented towards short term gains
     # and a more strategical solution, aimed at satiating all plants and getting the goal_reward.
@@ -202,8 +203,7 @@ class Controller:
         (plant_cords, water_needed) = plant
         mean_water_needed_to_satiate_plant = np.ceil((water_needed / success_rate))
         mean_water_missing_to_satiate = max(0, mean_water_needed_to_satiate_plant - load)
-        plant_rewards = self.original_game._plants_reward[plant_cords]
-        plant_mean_reward_per_water_unit = sum(plant_rewards) / len(plant_rewards)
+        plant_mean_reward_per_water_unit = self.plant_rewards[plant_cords]
 
         max_mean_reward_per_step_for_path = -float('inf')
         # Path going through a tap
