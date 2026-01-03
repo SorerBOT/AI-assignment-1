@@ -37,7 +37,12 @@ class Controller:
     def choose_next_action(self, state):
         """ Choose the next action given a state."""
         (robots, plants, taps, total_water_need) = state
-        best_path_data = self.find_greedy_best_robot_plant(robots, plants, taps)
+        non_empty_taps = [tap for tap in taps if tap[1] > 0]
+        non_empty_plants = [plant for plant in plants if plant[1] > 0]
+        total_robot_load = sum(robot[2] for robot in robots)
+        if total_robot_load == 0 and len(non_empty_taps) == 0:
+            return "RESET"
+        best_path_data = self.find_greedy_best_robot_plant(robots, non_empty_plants, non_empty_taps)
         if best_path_data is None:
             return "RESET"
         (robot, plant, tap_cords) = best_path_data
