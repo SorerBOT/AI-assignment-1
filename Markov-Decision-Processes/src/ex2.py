@@ -229,7 +229,7 @@ class Controller:
 # Returning to the second case, I simply note the mean amount of steps required to reach the plant, and the amount of load the robot can pour on the plant (depends on the amount of water it carries, and on the water needed by the plant)
 # then, I calculate the reward per step just as I had previously done.
 
-    def eval_robot_plant(self, robot: Robot, plant: Plant, taps: list[Tap]):
+    def eval_robot_plant(self, robot: Robot, plant: Plant, taps: list[Tap], goal_reward_per_water_unit: float):
         # I set up the BFS before calling eval_robot_plant
 
         # Getting remaining horizon
@@ -246,7 +246,7 @@ class Controller:
         (plant_cords, water_needed) = plant
         mean_water_needed_to_satiate_plant = np.ceil((water_needed / success_rate))
         mean_water_missing_to_satiate = max(0, mean_water_needed_to_satiate_plant - load)
-        plant_mean_reward_per_water_unit = self.plant_rewards[plant_cords]
+        plant_mean_reward_per_water_unit = self.plant_rewards[plant_cords] + goal_reward_per_water_unit
 
         max_mean_reward_per_step_for_path = -float('inf')
         # Path going through a tap
@@ -309,12 +309,24 @@ class Controller:
 
         return (max_mean_reward_per_step_for_path, max_tap_cords)
 
-    # Iterate over every robot & plant pair. Find the pair with the highest per step reward,
-    # then perform the first step in that plan. Then repeat the first step (finding the optimal path).
-    # this plan will likely remain the one with the highest reward per step rate
+    # Iterates over every robot & plant pair in order to find the pair with the highest {mean_reward_per_step_for_path},
+    # then take the first action in the selected path, and repeat the first step (finding the optimal path)
+    # this path will likely remain prevalent (in terms of reward per step rate)
     # (the reward per step probably increased if we took the right step), so we will probably follow it even if we allow
     # shifting to another plan.
+    # additionally, we incorporate the {goal_reward} into our evaluation, by adding {goal_reward} / {total_water_units_missing}
+    # to every plant's reward, if we would not have done this, the algorithm would often favour to satiate the "best" plant,
+    # then simply reset the problem and satiate it once more repeatedly, until the horizon is depleted.
     def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
+        best_success_rate = max(self.original_game._robot_chosen_action_prob[robot[0]] for robot in robots)
+        total_water_units_missing = sum(plant[1] for plant in plants)
+        total_water_units_available_in_taps = sum(tap[1] for tap in taps)
+        total_water_units_available_in_robots = sum(robot[2] for robot in robots)
+        if total_water_units_available_in_taps + total_water_units_available_in_robots < total_water_units_missing:
+            goal_reward_per_water_unit = 0
+        else:
+            goal_reward_per_water_unit = self.original_game._goal_reward / total_water_units_missing
+
         max_mean_reward_per_step_for_path = -float('inf')
         max_tap_cords = None
         max_robot = None
@@ -327,7 +339,7 @@ class Controller:
             self.update_bfs_distances(other_robot_cords)
 
             for plant in plants:
-                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(robot, plant, taps)
+                (mean_reward_per_step_for_path, tap_cords) = self.eval_robot_plant(robot, plant, taps, goal_reward_per_water_unit)
                 if max_mean_reward_per_step_for_path < mean_reward_per_step_for_path:
                     max_mean_reward_per_step_for_path = mean_reward_per_step_for_path
                     max_tap_cords = tap_cords
