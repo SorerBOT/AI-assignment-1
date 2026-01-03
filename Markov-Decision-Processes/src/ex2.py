@@ -46,7 +46,7 @@ class Controller:
             self.current_run_mean_reward = 0
             # The per-run-statistics are only relevant in terms of yield management, which is in other words the study of when should one reset.
             # for this reason, I pertain the "RESET" move to one of the moves associated with each run, and hence effecting its final {best_run_mean_reward_per_step}
-            self.current_run_length = 1
+            self.current_run_length = 1 # for some reason this works better when initialised to 0, even though it does not account for the RESET action
 
         if self.is_in_run:
             self.current_run_length += 1
@@ -320,9 +320,10 @@ class Controller:
     def find_greedy_best_robot_plant(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
         best_success_rate = max(self.original_game._robot_chosen_action_prob[robot[0]] for robot in robots)
         total_water_units_missing = sum(plant[1] for plant in plants)
+        min_mean_remaining_pours = total_water_units_missing / best_success_rate
         total_water_units_available_in_taps = sum(tap[1] for tap in taps)
         total_water_units_available_in_robots = sum(robot[2] for robot in robots)
-        if total_water_units_available_in_taps + total_water_units_available_in_robots < total_water_units_missing:
+        if total_water_units_available_in_taps + total_water_units_available_in_robots < 0.75 * min_mean_remaining_pours:
             goal_reward_per_water_unit = 0
         else:
             goal_reward_per_water_unit = self.original_game._goal_reward / total_water_units_missing
