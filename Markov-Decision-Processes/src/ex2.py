@@ -146,18 +146,18 @@ class Controller:
             self.best_run_length = self.current_run_length
             self.best_run_mean_reward_per_step = current_run_mean_reward_per_step
 
-    def get_legal_movement_actions(self, robots):
+    def get_legal_movement_actions(self, robot: Robot, robots: list[Robot]):
         possible_moves = []
 
         directions = [((0, 1), "RIGHT"), ((0, -1), "LEFT"), ((-1, 0), "UP"), ((1, 0), "DOWN")]
-        for robot_id, (r, c), load in robots:
-            for (dr, dc), action_name in directions:
-                destination = (r + dr, c + dc)
-                if (all(cords != destination for (_, cords, __) in robots) and
-                    destination not in self.original_game.walls and
-                    0 <= r + dr < self.original_game.rows and
-                    0 <= c + dc < self.original_game.cols):
-                    possible_moves.append((robot_id, (r + dr, c + dc), action_name))
+        robot_id, (r, c), load = robot
+        for (dr, dc), action_name in directions:
+            destination = (r + dr, c + dc)
+            if (all(cords != destination for (_, cords, __) in robots) and
+                destination not in self.original_game.walls and
+                0 <= r + dr < self.original_game.rows and
+                0 <= c + dc < self.original_game.cols):
+                possible_moves.append(((r + dr, c + dc), action_name))
         return possible_moves
 
     def calc_mean_steps(self, src: Cords, dst: Cords, success_rate: float):
@@ -420,41 +420,64 @@ class Controller:
     def find_lookahead_best_move(self, robots: list[Robot], plants: list[Plant], taps: list[Tap]):
         max_mean_reward_per_step = -float('inf')
         max_action = None
-        
-        for robot_id, robot_new_cords, action_name in self.get_legal_movement_actions(robots):
-            new_robots = []
-            for robot in robots:
-                if robot[0] == robot_id:
-                    new_robots.append((robot_id, robot_new_cords, robot[2]))
-                else:
-                    new_robots.append(robot)
-            best_path_data = self.find_greedy_best_robot_plant(new_robots, plants, taps, preceding_steps=1)
-            if best_path_data is not None:
-                (robot, plant, tap_cords, mean_reward_per_step) = best_path_data
-                if max_mean_reward_per_step < mean_reward_per_step:
-                    max_mean_reward_per_step = mean_reward_per_step
-                    max_action = f"{action_name}({robot_id})"
-            # trying the next depth. This is quite a silly implementation.
-            # it does not work well, because I did not account for the robot's success_rate, and so it
-            # can generate a plan that's pretty unlikely to really be happen 
 
+        staying_in_place_path_data = self.find_greedy_best_robot_plant(robots, plants, taps, preceding_steps=1)
+        if staying_in_place_path_data is None:
+            return None
 
-            # because for every robot, we consider every possible move anyways, and calculate its greedy value
-            # then for every robot movement, I can calculate the movements's greedy value using the following formula:
-            #   V = {success_rate} * post_move_greedy_value + (1 - {success_rate}) / 5 * greedy_value_after_going_left + (1 - {success_rate}) / 5 * greedy_value_after_going_down + (1 - {success_rate}) / 5 * greedy_value_after_going_right + (1 - {success_rate}) / 5 * greedy_value_after_going_up + (1 - {success_rate}) / 5 * greedy_value_staying_in_place
-            for new_robot_id, new_robot_new_cords, _ in self.get_legal_movement_actions(new_robots):
-                new_new_robots = []
-                for robot in new_robots:
-                    if robot[0] == new_robot_id:
-                        new_new_robots.append((new_robot_id, new_robot_new_cords, robot[2]))
+        (_, __, ___, staying_in_place_mean_reward_per_step) = staying_in_place_path_data
+        for robot in robots:
+            robot_expected_move_values = {}
+            robot_id, (r, c), load = robot
+            success_rate = self.original_game._robot_chosen_action_prob[robot_id]
+            legal_moves = self.get_legal_movement_actions(robot, robots)
+            for robot_new_cords, action_name in legal_moves:
+                new_robots = []
+                for robot in robots:
+                    if robot[0] == robot_id:
+                        new_robots.append((robot_id, robot_new_cords, robot[2]))
                     else:
-                        new_new_robots.append(robot)
-                best_path_data = self.find_greedy_best_robot_plant(new_new_robots, plants, taps, preceding_steps=2)
+                        new_robots.append(robot)
+                best_path_data = self.find_greedy_best_robot_plant(new_robots, plants, taps, preceding_steps=1)
                 if best_path_data is not None:
-                    (__, ___, ____, mean_reward_per_step) = best_path_data
-                    if max_mean_reward_per_step < mean_reward_per_step:
-                        max_mean_reward_per_step = mean_reward_per_step
-                        max_action = f"{action_name}({robot_id})" # the action in which we are interested is the first action in the sequence
+                    (robot, plant, tap_cords, mean_reward_per_step) = best_path_data
+                    robot_expected_move_values[action_name] = mean_reward_per_step
+                else:
+                    return None
+                    #raise Exception("This scenario requires a reset. If this exception will pop in the tests then I'll do it, but I wnat to check if it pops first")
+
+            for action_name, expected_value_of_end_state in robot_expected_move_values.items():
+                other_moves_cumulative_value = sum(expected_value_other_end_state for (other_action, expected_value_other_end_state) in robot_expected_move_values.items() if other_action != action_name)
+                other_moves_cumulative_value_with_staying = other_moves_cumulative_value + staying_in_place_mean_reward_per_step
+                other_moves_mean_value = (1 / len(robot_expected_move_values)) * other_moves_cumulative_value_with_staying
+                expected_action_value_per_step = success_rate * expected_value_of_end_state + (1 - success_rate) * other_moves_mean_value
+                if max_mean_reward_per_step < expected_action_value_per_step:
+                    max_mean_reward_per_step = expected_action_value_per_step
+                    max_action = f"{action_name}({robot_id})"
+
+
+                # trying the next depth. This is quite a silly implementation.
+                # it does not work well, because I did not account for the robot's success_rate, and so it
+                # can generate a plan that's pretty unlikely to really be happen 
+
+
+                # because for every robot, we consider every possible move anyways, and calculate its greedy value
+                # then for every robot movement, I can calculate the movements's greedy value using the following formula:
+                #   V = {success_rate} * post_move_greedy_value + (1 - {success_rate}) / 5 * greedy_value_after_going_left + (1 - {success_rate}) / 5 * greedy_value_after_going_down + (1 - {success_rate}) / 5 * greedy_value_after_going_right + (1 - {success_rate}) / 5 * greedy_value_after_going_up + (1 - {success_rate}) / 5 * greedy_value_staying_in_place
+
+                #for new_robot_id, new_robot_new_cords, _ in self.get_legal_movement_actions(new_robots):
+                #    new_new_robots = []
+                #    for robot in new_robots:
+                #        if robot[0] == new_robot_id:
+                #            new_new_robots.append((new_robot_id, new_robot_new_cords, robot[2]))
+                #        else:
+                #            new_new_robots.append(robot)
+                #    best_path_data = self.find_greedy_best_robot_plant(new_new_robots, plants, taps, preceding_steps=2)
+                #    if best_path_data is not None:
+                #        (__, ___, ____, mean_reward_per_step) = best_path_data
+                #        if max_mean_reward_per_step < mean_reward_per_step:
+                #            max_mean_reward_per_step = mean_reward_per_step
+                #            max_action = f"{action_name}({robot_id})" # the action in which we are interested is the first action in the sequence
 
         if max_mean_reward_per_step == -float('inf') or max_action == None:
             return None
