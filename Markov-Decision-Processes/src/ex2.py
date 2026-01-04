@@ -443,7 +443,13 @@ class Controller:
                     (robot, plant, tap_cords, mean_reward_per_step) = best_path_data
                     robot_expected_move_values[action_name] = mean_reward_per_step
                 else:
-                    return None
+                    # this situation indicates that a reset would've been prevalent
+                    if (max_mean_reward_per_step < self.best_run_mean_reward_per_step
+                        and self.best_run_length <= self.original_game.get_max_steps() - self.original_game.get_current_steps()):
+                        robot_expected_move_values[action_name] = self.best_run_mean_reward_per_step
+                    else:
+                        pass
+                    #return None
                     #raise Exception("This scenario requires a reset. If this exception will pop in the tests then I'll do it, but I wnat to check if it pops first")
 
             for action_name, expected_value_of_end_state in robot_expected_move_values.items():
@@ -455,6 +461,9 @@ class Controller:
                     max_mean_reward_per_step = expected_action_value_per_step
                     max_action = f"{action_name}({robot_id})"
 
+        if max_mean_reward_per_step == -float('inf') or max_action == None:
+            return None
+        return (max_mean_reward_per_step, max_action)
 
                 # trying the next depth. This is quite a silly implementation.
                 # it does not work well, because I did not account for the robot's success_rate, and so it
@@ -479,6 +488,6 @@ class Controller:
                 #            max_mean_reward_per_step = mean_reward_per_step
                 #            max_action = f"{action_name}({robot_id})" # the action in which we are interested is the first action in the sequence
 
-        if max_mean_reward_per_step == -float('inf') or max_action == None:
-            return None
-        return (max_mean_reward_per_step, max_action)
+        #if max_mean_reward_per_step == -float('inf') or max_action == None:
+        #    return None
+        #return (max_mean_reward_per_step, max_action)
