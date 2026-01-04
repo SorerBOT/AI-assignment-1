@@ -403,6 +403,30 @@ class Controller:
                 if max_mean_reward_per_step < mean_reward_per_step:
                     max_mean_reward_per_step = mean_reward_per_step
                     max_action = f"{action_name}({robot_id})"
+            # trying the next depth. This is quite a silly implementation.
+            # it does not work well, because I did not account for the robot's success_rate, and so it
+            # can generate a plan that's pretty unlikely to really be happen 
+
+
+# because for every robot, we consider every possible move anyways, and calculate its greedy value
+# then for every robot movement, I can calculate the movements's greedy value using the following formula:
+#   V = {success_rate} * post_move_greedy_value + (1 - {success_rate}) / 5 * greedy_value_after_going_left + (1 - {success_rate}) / 5 * greedy_value_after_going_down + (1 - {success_rate}) / 5 * greedy_value_after_going_right + (1 - {success_rate}) / 5 * greedy_value_after_going_up + (1 - {success_rate}) / 5 * greedy_value_staying_in_place
+
+
+
+            for new_robot_id, new_robot_new_cords, _ in self.get_legal_movement_actions(new_robots):
+                new_new_robots = []
+                for robot in new_robots:
+                    if robot[0] == new_robot_id:
+                        new_new_robots.append((new_robot_id, new_robot_new_cords, robot[2]))
+                    else:
+                        new_new_robots.append(robot)
+                best_path_data = self.find_greedy_best_robot_plant(new_new_robots, plants, taps, preceding_steps=2)
+                if best_path_data is not None:
+                    (__, ___, ____, mean_reward_per_step) = best_path_data
+                    if max_mean_reward_per_step < mean_reward_per_step:
+                        max_mean_reward_per_step = mean_reward_per_step
+                        max_action = f"{action_name}({robot_id})" # the action in which we are interested is the first action in the sequence
 
         if max_mean_reward_per_step == -float('inf') or max_action == None:
             return None
