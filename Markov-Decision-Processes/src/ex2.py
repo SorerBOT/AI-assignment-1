@@ -169,27 +169,27 @@ class Controller:
         # In case of failure, we have 4 options, moving UP, DOWN, RIGHT, LEFT and staying ***MINUS*** the wanted operation.
         # In the corridor situation 3/4 directions drift us away, and staying in place is neutral.
         # So the expectation of steps on failure is:
-        # 3 * 0.2 * (-1) + 0.2 * 0 = -0.6
+        # 3 * 0.25 * (-1) + 0.25 * 0 = -0.75
         # Now the total expectation of a step (including both failure and success), is:
-        # success_rate * 1 - 0.6 * (1 - success_rate) = 1.6 * success_rate - 0.6
-        # and from here we would need distance / (1.6 * success_rate - 0.6) steps to reach dst.
+        # success_rate * 1 - 0.75 * (1 - success_rate) = 1.75 * success_rate - 0.75
+        # and from here we would need distance / (1.75 * success_rate - 0.75) steps to reach dst.
         # this is a direct deduction from Wald's theorem: https://en.wikipedia.org/wiki/Wald%27s_equation
 
         if (x_1 == y_1 or x_2 == y_2):
-            return distance / (1.6 * success_rate - 0.6)
+            return distance / (1.75 * success_rate - 0.75)
 
         # non-corridor situation, we need to circle around a block
         # We once more have 4 options (on failure), moving in one of the three remaining directions, and staying in place.
         # The difference is that in this case, one of the three directions advances us,
         # two of them harm us, and staying in place is neutral.
         # the above yields the following EXPECTATION of advancement per failure:
-        #   E = 2 * 0.2 * (-1) + 1 * 0.2 * 1 + 0.2 * 0 = -0.2
-        # this means that the EXPECTED advancement, on failure is -0.2.
+        #   E = 2 * 0.25 * (-1) + 1 * 0.25 * 1 + 0 * 0.25 = -0.25
+        # this means that the EXPECTED advancement, on failure is -0.25.
         # from here, the mean advancement in general is:
-        # E = success_rate * 1 + (1 - success_rate) * (-1) * 0.2 = 1.2 * success_rate - 0.2
+        # E = success_rate * 1 + (1 - success_rate) * (-1) * 0.25 = 1.25 * success_rate - 0.25
         # and for this reason, using Wald's Theorem or common sense, we find that:
-        # E[steps_required] = distance / (1.2 * success_rate - 0.2) 
-        return distance / (1.2 * success_rate - 0.2)
+        # E[steps_required] = distance / (1.25 * success_rate - 0.25) 
+        return distance / (1.25 * success_rate - 0.25)
 
 
     # the only way in which this BFS function is different than normal BFS
